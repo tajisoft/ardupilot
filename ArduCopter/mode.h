@@ -1190,3 +1190,22 @@ protected:
 
     uint32_t last_log_ms;   // system time of last time desired velocity was logging
 };
+
+class ModeNew : public Mode {
+
+public:
+
+	using Copter::Mode::Mode;
+	bool init(bool ignore_checks) override;
+	void run() override;
+	bool requires_GPS() const override { return false; }
+	bool has_manual_throttle() const override { return true; }
+	bool allows_arming(bool from_gcs) const override { return true; }
+	bool is_autopilot() const override { return false; }
+
+protected:
+	const char *name() const override { return "NEWMODE"; }
+	const char *name4() const override { return "NEWM"; }
+
+private:
+};

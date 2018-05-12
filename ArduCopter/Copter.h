@@ -1005,6 +1005,9 @@ private:
 #if MODE_THROW_ENABLED == ENABLED
     ModeThrow mode_throw;
 #endif
+#if MODE_NEW_ENABLED == ENABLED
+    ModeNew mode_new;
+#endif
 #if MODE_GUIDED_NOGPS_ENABLED == ENABLED
     ModeGuidedNoGPS mode_guided_nogps;
 #endif

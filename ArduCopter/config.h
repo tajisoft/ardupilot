@@ -350,6 +350,12 @@
 #endif
 
 //////////////////////////////////////////////////////////////////////////////
+// New - my first flight mode
+#ifndef MODE_NEW_ENABLED
+# define MODE_NEW_ENABLED ENABLED
+#endif
+
+//////////////////////////////////////////////////////////////////////////////
 // Beacon support - support for local positioning systems
 #ifndef BEACON_ENABLED
 # define BEACON_ENABLED !HAL_MINIMIZE_FEATURES
