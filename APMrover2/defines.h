@@ -85,6 +85,21 @@ enum fs_crash_action {
 
 #define DISTANCE_HOME_MAX 0.5f  // Distance max to home location before changing it when disarm
 
+enum control_mode_t {
+    MANUAL       = 0,
+    ACRO         = 1,
+    STEERING     = 3,
+    HOLD         = 4,
+    LOITER       = 5,
+    FOLLOW       = 6,
+    SIMPLE       = 7,
+    AUTO         = 10,
+    RTL          = 11,
+    SMART_RTL    = 12,
+    GUIDED       = 15,
+    INITIALISING = 16
+};
+
 enum mode_reason_t {
     MODE_REASON_INITIALISED = 0,
     MODE_REASON_TX_COMMAND,

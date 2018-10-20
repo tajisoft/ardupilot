@@ -10,44 +10,44 @@
 
 #include <RC_Channel/RC_Channels_VarInfo.h>
 
-Mode *Rover::mode_from_mode_num(const enum Mode::Number num)
+Mode *Rover::mode_from_mode_num(const enum control_mode_t num)
 {
     Mode *ret = nullptr;
     switch (num) {
-    case Mode::Number::MANUAL:
+    case MANUAL:
         ret = &mode_manual;
         break;
-    case Mode::Number::ACRO:
+    case ACRO:
         ret = &mode_acro;
         break;
-    case Mode::Number::STEERING:
+    case STEERING:
         ret = &mode_steering;
         break;
-    case Mode::Number::HOLD:
+    case HOLD:
         ret = &mode_hold;
         break;
-    case Mode::Number::LOITER:
+    case LOITER:
         ret = &mode_loiter;
         break;
-    case Mode::Number::FOLLOW:
+    case FOLLOW:
         ret = &mode_follow;
         break;
-    case Mode::Number::SIMPLE:
+    case SIMPLE:
         ret = &mode_simple;
         break;
-    case Mode::Number::AUTO:
+    case AUTO:
         ret = &mode_auto;
         break;
-    case Mode::Number::RTL:
+    case RTL:
         ret = &mode_rtl;
         break;
-    case Mode::Number::SMART_RTL:
+    case SMART_RTL:
         ret = &mode_smartrtl;
         break;
-    case Mode::Number::GUIDED:
+    case GUIDED:
        ret = &mode_guided;
         break;
-    case Mode::Number::INITIALISING:
+    case INITIALISING:
         ret = &mode_initializing;
         break;
     default:
@@ -67,7 +67,7 @@ void RC_Channel_Rover::mode_switch_changed(modeswitch_pos_t new_pos)
         // should not have been called
         return;
     }
-    Mode *new_mode = rover.mode_from_mode_num((Mode::Number)rover.modes[new_pos].get());
+    Mode *new_mode = rover.mode_from_mode_num((control_mode_t)rover.modes[new_pos].get());
     if (new_mode != nullptr) {
         rover.set_mode(*new_mode, MODE_REASON_TX_COMMAND);
     }

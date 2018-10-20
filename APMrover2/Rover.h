@@ -444,7 +444,7 @@ private:
     void delay(uint32_t ms);
 
     // control_modes.cpp
-    Mode *mode_from_mode_num(enum Mode::Number num);
+    Mode *mode_from_mode_num(enum control_mode_t num);
 
     // crash_check.cpp
     void crash_check();
