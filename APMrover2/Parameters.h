@@ -204,6 +204,7 @@ public:
         k_param_notify,
         k_param_button,
         k_param_osd,
+        k_param_mis_done_behave,
 
         k_param_DataFlash = 253,  // Logging Group
 
@@ -384,6 +385,9 @@ public:
 
     // Airspeed
     AP_Airspeed airspeed;
+
+    // mission behave
+    AP_Int8 mis_done_behave;
 };
 
 extern const AP_Param::Info var_info[];

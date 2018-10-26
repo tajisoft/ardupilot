@@ -25,19 +25,14 @@ bool Mode::enter()
 
         // get EKF filter status
         nav_filter_status filt_status;
-        rover.ahrs.get_filter_status(filt_status);
 
-        // check position estimate.  requires origin and at least one horizontal position flag to be true
-        Location origin;
-        const bool position_ok = ahrs.get_origin(origin) &&
-                                (filt_status.flags.horiz_pos_abs || filt_status.flags.pred_horiz_pos_abs ||
-                                 filt_status.flags.horiz_pos_rel || filt_status.flags.pred_horiz_pos_rel);
-        if (requires_position() && !position_ok) {
+        const bool is_position_ok = rover.position_ok(filt_status);
+        if (requires_position() && !is_position_ok) {
             return false;
         }
 
         // check velocity estimate (if we have position estimate, we must have velocity estimate)
-        if (requires_velocity() && !position_ok && !filt_status.flags.horiz_vel) {
+        if (requires_velocity() && !is_position_ok && !filt_status.flags.horiz_vel) {
             return false;
         }
     }
