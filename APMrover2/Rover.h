@@ -443,7 +443,6 @@ private:
     void do_change_speed(const AP_Mission::Mission_Command& cmd);
     void do_set_home(const AP_Mission::Mission_Command& cmd);
     void do_set_reverse(const AP_Mission::Mission_Command& cmd);
-    uint8_t get_mis_done_behave() { return g2.mis_done_behave.get(); }
 
     enum Mis_Done_Behave {
         Mis_Done_Behave_Hold      = 0,
