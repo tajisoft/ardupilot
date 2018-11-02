@@ -2,8 +2,7 @@
 #include "Rover.h"
 
 // constructor
-ModeAuto::ModeAuto(ModeLoiter& mode_loiter, ModeRTL& mode_rtl) :
-    _mode_loiter(mode_loiter),
+ModeAuto::ModeAuto(ModeRTL& mode_rtl) :
     _mode_rtl(mode_rtl)
 {
 }
@@ -76,10 +75,6 @@ void ModeAuto::update()
             break;
         }
 
-        case Auto_Loiter:
-            _mode_loiter.update();
-            break;
-
         case Auto_RTL:
             _mode_rtl.update();
             break;
@@ -137,27 +132,6 @@ bool ModeAuto::reached_heading()
     return true;
 }
 
-// start loiter
-bool ModeAuto::loiter_start()
-{
-    // return failure if frame is not boat
-    if (!rover.is_boat()) {
-        return false;
-    }
-
-    // return failure if position is bad
-    nav_filter_status filt_status;
-    if (!rover.position_ok(filt_status)) {
-        return false;
-    }  
-
-    _submode = Auto_Loiter;
-
-    // calculate stopping destination
-    calc_stopping_location(_destination);
-
-    return true;    
-}
 
 // start RTL (within auto)
 void ModeAuto::start_RTL()
