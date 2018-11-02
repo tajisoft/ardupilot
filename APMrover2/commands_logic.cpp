@@ -109,11 +109,11 @@ void Rover::exit_mission()
     // send message
     gcs().send_text(MAV_SEVERITY_NOTICE, "Mission Complete");
 
-    if (get_mis_done_behave() == Mis_Done_Behave_Hold) {
-        set_mode(mode_hold, MODE_REASON_MISSION_END);
-    } else if (!mode_auto.loiter_start()) {
-        set_mode(mode_hold, MODE_REASON_MISSION_END);
+    if (g2.mis_done_behave == Mis_Done_Behave_Loiter) {
+        set_mode(mode_loiter, MODE_REASON_MISSION_END);
+        return;
     }
+    set_mode(mode_hold, MODE_REASON_MISSION_END);
 }
 
 // verify_command_callback - callback function called from ap-mission at 10hz or higher when a command is being run
