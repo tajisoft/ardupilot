@@ -163,6 +163,12 @@ Copter::Mode *Copter::mode_from_mode_num(const uint8_t mode)
             break;
 #endif
 
+#if MODE_CANDR_ENABLED == ENABLED
+        case CANDR:
+            ret = &mode_candr;
+            break;
+#endif
+
         default:
             break;
     }
