@@ -1,76 +1,46 @@
-/*
-   This program is free software: you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation, either version 3 of the License, or
-   (at your option) any later version.
-
-   This program is distributed in the hope that it will be useful,
-   but WITHOUT ANY WARRANTY; without even the implied warranty of
-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
-
-   You should have received a copy of the GNU General Public License
-   along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
 #pragma once
 
-#include "RangeFinder.h"
 #include "RangeFinder_Backend.h"
 
-class AP_RangeFinder_NMEA2k : public AP_RangeFinder_Backend
-{
+#include <AP_UAVCAN/AP_UAVCAN.h>
 
+class WaterDepthCb;
+
+class AP_RangeFinder_NMEA2K : public AP_RangeFinder_Backend {
 public:
-    // constructor
-    AP_RangeFinder_NMEA2k(RangeFinder::RangeFinder_State &_state,
-                        AP_SerialManager &serial_manager,
-                        uint8_t serial_instance);
+    AP_RangeFinder_NMEA2K(RangeFinder::RangeFinder_State &_state);
 
-    // static detection function
-    static bool detect(AP_SerialManager &serial_manager, uint8_t serial_instance);
+    void update() override;
 
-    // update state
-    void update(void) override;
+    RangeFinder *_instance;
 
-protected:
+    static void subscribe_msgs(AP_UAVCAN* ap_uavcan);
+    static AP_RangeFinder_NMEA2K* get_uavcan_backend(AP_UAVCAN* ap_uavcan, uint8_t node_id, bool create_new);
+    static AP_RangeFinder_Backend* probe(RangeFinder &rangefinder);
 
-    virtual MAV_DISTANCE_SENSOR _get_mav_distance_sensor_type() const override {
-        return MAV_DISTANCE_SENSOR_ULTRASOUND;
-    }
+    static void handle_waterdepth(AP_UAVCAN* ap_uavcan, uint8_t node_id, const WaterDepthCb &cb);
 
 private:
+    static bool take_registry();
+    static void give_registry();
 
-    /// enum for handled messages
-    enum sentence_types : uint8_t {
-        SONAR_UNKNOWN = 0,
-        SONAR_DBT,
-        SONAR_DPT
-    };
+    uint8_t _instance;
 
-    // get a reading
-    bool get_reading(uint16_t &reading_cm);
+    bool new_water_depth;
+    float _water_depth;
+    uint64_t _last_timestamp;
 
-    // add a single character to the buffer and attempt to decode
-    // returns true if a complete sentence was successfully decoded
-    // distance should be pulled directly from _distance_m member
-    bool decode(char c);
+    HAL_Semaphore _sem_baro;
 
-    // decode the just-completed term
-    // returns true if new sentence has just passed checksum test and is validated
-    bool decode_latest_term();
+    AP_UAVCAN* _ap_uavcan;
+    uint8_t _node_id;
 
-    // return the numeric value of an ascii hex character
-    static int16_t char_to_hex(char a);
+    // Module Detection Registry
+    static struct DetectedModules {
+        AP_UAVCAN* ap_uavcan;
+        uint8_t node_id;
+        AP_RangeFinder_NMEA2K* driver;
+    } _detected_modules[RANGEFINDER_MAX_INSTANCES];
 
-    AP_HAL::UARTDriver *uart = nullptr;     // pointer to serial uart
-
-    // message decoding related members
-    char _term[15];                         // buffer for the current term within the current sentence
-    uint8_t _term_offset;                   // offset within the _term buffer where the next character should be placed
-    uint8_t _term_number;                   // term index within the current sentence
-    float _distance_m;                      // distance in meters parsed from a term, -1 if no distance
-    uint8_t _checksum;                      // checksum accumulator
-    bool _term_is_checksum;                 // current term is the checksum
-    sentence_types _sentence_type;          // the sentence type currently being processed
+    static HAL_Semaphore _sem_registry;
 };

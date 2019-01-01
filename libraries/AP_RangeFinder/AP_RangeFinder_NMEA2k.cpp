@@ -1,186 +1,154 @@
-/*
-   This program is free software: you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation, either version 3 of the License, or
-   (at your option) any later version.
-
-   This program is distributed in the hope that it will be useful,
-   but WITHOUT ANY WARRANTY; without even the implied warranty of
-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
-
-   You should have received a copy of the GNU General Public License
-   along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
 #include <AP_HAL/AP_HAL.h>
-#include "AP_RangeFinder_LightWareSerial.h"
-#include <AP_SerialManager/AP_SerialManager.h>
-#include <ctype.h>
-#include "AP_RangeFinder_NMEA2k.h"
+
+#if HAL_WITH_UAVCAN
+
+#include "AP_RangeFinder_UAVCAN.h"
+
+#include <AP_UAVCAN/AP_UAVCAN.h>
+
+#include <uavcan/equipment/sonner/WaterDepth.hpp>
 
 extern const AP_HAL::HAL& hal;
 
-// constructor initialises the rangefinder
-// Note this is called after detect() returns true, so we
-// already know that we should setup the rangefinder
-AP_RangeFinder_NMEA2k::AP_RangeFinder_NMEA2k(RangeFinder::RangeFinder_State &_state,
-                                         AP_SerialManager &serial_manager,
-                                         uint8_t serial_instance) :
-    AP_RangeFinder_Backend(_state),
-    _distance_m(-1.0f)
+#define debug_water_depth_uavcan(level_debug, can_driver, fmt, args...) do { if ((level_debug) <= AP::can().get_debug_level_driver(can_driver)) { printf(fmt, ##args); }} while (0)
+
+//UAVCAN Frontend Registry Binder
+UC_REGISTRY_BINDER(WaterDepthCb, uavcan::equipment::sonner::WaterDepth);
+
+AP_RangeFinder_NMEA2K::DetectedModules AP_RangeFinder_NMEA2K::_detected_modules[] = {0};
+HAL_Semaphore AP_RangeFinder_NMEA2K::_sem_registry;
+
+/*
+  constructor - registers instance at top Baro driver
+ */
+AP_RangeFinder_NMEA2K::AP_RangeFinder_NMEA2K(RangeFinder::RangeFinder_State &_state) :
+    AP_RangeFinder_Backend(_state)
+{}
+
+void AP_RangeFinder_NMEA2K::subscribe_msgs(AP_UAVCAN* ap_uavcan)
 {
-    uart = serial_manager.find_serial(AP_SerialManager::SerialProtocol_Rangefinder, serial_instance);
-    if (uart != nullptr) {
-        uart->begin(serial_manager.find_baudrate(AP_SerialManager::SerialProtocol_Rangefinder, serial_instance));
+    if (ap_uavcan == nullptr) {
+        return;
+    }
+
+    auto* node = ap_uavcan->get_node();
+
+    uavcan::Subscriber<uavcan::equipment::sonner::WaterDepth, WaterDepthCb> *water_depth_listener;
+    // Msg Handler
+    const int water_depth_listener_res = water_depth_listener->start(WaterDepthCb(ap_uavcan, &handle_water_depth));
+    if (water_depth_listener_res < 0) {
+        AP_HAL::panic("UAVCAN WaterDepth subscriber start problem\n\r");
+        return;
     }
 }
 
-// detect if a NMEA rangefinder by looking to see if the user has configured it
-bool AP_RangeFinder_NMEA2k::detect(AP_SerialManager &serial_manager, uint8_t serial_instance)
+bool AP_RangeFinder_NMEA2K::take_registry()
 {
-    return serial_manager.find_serial(AP_SerialManager::SerialProtocol_Rangefinder, serial_instance) != nullptr;
+    return _sem_registry.take(HAL_SEMAPHORE_BLOCK_FOREVER);
 }
 
-// update the state of the sensor
-void AP_RangeFinder_NMEA2k::update(void)
+void AP_RangeFinder_NMEA2K::give_registry()
 {
-    uint32_t now = AP_HAL::millis();
-    if (get_reading(state.distance_cm)) {
-        // update range_valid state based on distance measured
-        state.last_reading_ms = now;
-        update_status();
-    } else if ((now - state.last_reading_ms) > 3000) {
-        set_status(RangeFinder::RangeFinder_NoData);
-    }
+    _sem_registry.give();
 }
 
-// return last value measured by sensor
-bool AP_RangeFinder_NMEA2k::get_reading(uint16_t &reading_cm)
+AP_RangeFinder_Backend* AP_RangeFinder_NMEA2K::probe(RangeFinder &rangefinder)
 {
-    if (uart == nullptr) {
-        return false;
+    if (!take_registry()) {
+        return nullptr;
     }
+    AP_RangeFinder_Backend* backend = nullptr;
+    for (uint8_t i = 0; i < RANGEFINDER_MAX_INSTANCES; i++) {
+        if (_detected_modules[i].driver == nullptr && _detected_modules[i].ap_uavcan != nullptr) {
+            backend = new AP_RangeFinder_NMEA2K(rangefinder);
+            if (backend == nullptr) {
+                debug_water_depth_uavcan(2,
+                                  _detected_modules[i].ap_uavcan->get_driver_index(),
+                                  "Failed register UAVCAN Baro Node %d on Bus %d\n",
+                                  _detected_modules[i].node_id,
+                                  _detected_modules[i].ap_uavcan->get_driver_index());
+            } else {
+                _detected_modules[i].driver = backend;
+                backend->_ap_uavcan = _detected_modules[i].ap_uavcan;
+                backend->_node_id = _detected_modules[i].node_id;
+                backend->register_sensor();
+                debug_water_depth_uavcan(2,
+                                  _detected_modules[i].ap_uavcan->get_driver_index(),
+                                  "Registered UAVCAN Baro Node %d on Bus %d\n",
+                                  _detected_modules[i].node_id,
+                                  _detected_modules[i].ap_uavcan->get_driver_index());
+            }
+            break;
+        }
+    }
+    give_registry();
+    return backend;
+}
 
-    // read any available lines from the lidar
-    float sum = 0.0f;
-    uint16_t count = 0;
-    int16_t nbytes = uart->available();
-    while (nbytes-- > 0) {
-        char c = uart->read();
-        if (decode(c)) {
-            sum += _distance_m;
-            count++;
+AP_RangeFinder_NMEA2K* AP_RangeFinder_NMEA2K::get_uavcan_backend(AP_UAVCAN* ap_uavcan, uint8_t node_id, bool create_new)
+{
+    if (ap_uavcan == nullptr) {
+        return nullptr;
+    }
+    for (uint8_t i = 0; i < RANGEFINDER_MAX_INSTANCES; i++) {
+        if (_detected_modules[i].driver != nullptr &&
+            _detected_modules[i].ap_uavcan == ap_uavcan && 
+            _detected_modules[i].node_id == node_id) {
+            return _detected_modules[i].driver;
+        }
+    }
+    
+    if (create_new) {
+        bool already_detected = false;
+        //Check if there's an empty spot for possible registeration
+        for (uint8_t i = 0; i < RANGEFINDER_MAX_INSTANCES; i++) {
+            if (_detected_modules[i].ap_uavcan == ap_uavcan && _detected_modules[i].node_id == node_id) {
+                //Already Detected
+                already_detected = true;
+                break;
+            }
+        }
+        if (!already_detected) {
+            for (uint8_t i = 0; i < RANGEFINDER_MAX_INSTANCES; i++) {
+                if (_detected_modules[i].ap_uavcan == nullptr) {
+                    _detected_modules[i].ap_uavcan = ap_uavcan;
+                    _detected_modules[i].node_id = node_id;
+                    break;
+                }
+            }
         }
     }
 
-    // return false on failure
-    if (count == 0) {
-        return false;
-    }
-
-    // return average of all measurements
-    reading_cm = 100.0f * sum / count;
-    return true;
+    return nullptr;
 }
 
-// add a single character to the buffer and attempt to decode
-// returns true if a complete sentence was successfully decoded
-bool AP_RangeFinder_NMEA2k::decode(char c)
+void AP_RangeFinder_NMEA2K::handle_water_depth(AP_UAVCAN* ap_uavcan, uint8_t node_id, const WaterDepthCb &cb)
 {
-    switch (c) {
-    case ',':
-        // end of a term, add to checksum
-        _checksum ^= c;
-        FALLTHROUGH;
-    case '\r':
-    case '\n':
-    case '*':
-    {
-        // null terminate and decode latest term
-        _term[_term_offset] = 0;
-        bool valid_sentence = decode_latest_term();
-
-        // move onto next term
-        _term_number++;
-        _term_offset = 0;
-        _term_is_checksum = (c == '*');
-        return valid_sentence;
+    if (take_registry()) {
+        AP_RangeFinder_NMEA2K* driver = get_uavcan_backend(ap_uavcan, node_id, true);
+        if (driver == nullptr) {
+            give_registry();
+            return;
+        }
+        {
+            WITH_SEMAPHORE(driver->_sem_baro);
+            driver->_pressure = cb.msg->static_pressure;
+            driver->new_pressure = true;
+        }
+        give_registry();
     }
-
-    case '$': // sentence begin
-        _sentence_type = SONAR_UNKNOWN;
-        _term_number = 0;
-        _term_offset = 0;
-        _checksum = 0;
-        _term_is_checksum = false;
-        _distance_m = -1.0f;
-        return false;
-    }
-
-    // ordinary characters are added to term
-    if (_term_offset < sizeof(_term) - 1)
-        _term[_term_offset++] = c;
-    if (!_term_is_checksum)
-        _checksum ^= c;
-
-    return false;
 }
 
-// decode the most recently consumed term
-// returns true if new sentence has just passed checksum test and is validated
-bool AP_RangeFinder_NMEA2k::decode_latest_term()
+// Read the sensor
+void AP_Baro_UAVCAN::update(void)
 {
-    // handle the last term in a message
-    if (_term_is_checksum) {
-        uint8_t checksum = 16 * char_to_hex(_term[0]) + char_to_hex(_term[1]);
-        return ((checksum == _checksum) &&
-                !is_negative(_distance_m) &&
-                (_sentence_type == SONAR_DBT || _sentence_type == SONAR_DPT));
-    }
+    WITH_SEMAPHORE(_sem_baro);
+    if (new_pressure) {
+        _copy_to_frontend(_instance, _pressure, _temperature);
 
-    // the first term determines the sentence type
-    if (_term_number == 0) {
-        // the first two letters of the NMEA term are the talker ID.
-        // we accept any two characters here.
-        if (_term[0] < 'A' || _term[0] > 'Z' ||
-            _term[1] < 'A' || _term[1] > 'Z') {
-            _sentence_type = SONAR_UNKNOWN;
-            return false;
-        }
-        const char *term_type = &_term[2];
-        if (strcmp(term_type, "DBT") == 0) {
-            _sentence_type = SONAR_DBT;
-        } else if (strcmp(term_type, "DPT") == 0) {
-            _sentence_type = SONAR_DPT;
-        } else {
-            _sentence_type = SONAR_UNKNOWN;
-        }
-        return false;
+        _frontend.set_external_temperature(_temperature);
+        new_pressure = false;
     }
-
-    if (_sentence_type == SONAR_DBT) {
-        // parse DBT messages
-        if (_term_number == 3) {
-            _distance_m = atof(_term);
-        }
-    } else if (_sentence_type == SONAR_DPT) {
-        // parse DPT messages
-        if (_term_number == 1) {
-            _distance_m = atof(_term);
-        }
-    }
-
-    return false;
 }
 
-// return the numeric value of an ascii hex character
-int16_t AP_RangeFinder_NMEA2k::char_to_hex(char a)
-{
-    if (a >= 'A' && a <= 'F')
-        return a - 'A' + 10;
-    else if (a >= 'a' && a <= 'f')
-        return a - 'a' + 10;
-    else
-        return a - '0';
-}
+#endif // HAL_WITH_UAVCAN
