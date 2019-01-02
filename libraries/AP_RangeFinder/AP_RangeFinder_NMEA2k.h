@@ -2,6 +2,7 @@
 
 #include "RangeFinder_Backend.h"
 
+#include <AP_Common/Semaphore.h>
 #include <AP_UAVCAN/AP_UAVCAN.h>
 
 class WaterDepthCb;
@@ -12,19 +13,15 @@ public:
 
     void update() override;
 
-    RangeFinder *_instance;
-
     static void subscribe_msgs(AP_UAVCAN* ap_uavcan);
     static AP_RangeFinder_NMEA2K* get_uavcan_backend(AP_UAVCAN* ap_uavcan, uint8_t node_id, bool create_new);
-    static AP_RangeFinder_Backend* probe(RangeFinder &rangefinder);
+    // static AP_RangeFinder_Backend* probe(RangeFinder &rangefinder);
 
-    static void handle_waterdepth(AP_UAVCAN* ap_uavcan, uint8_t node_id, const WaterDepthCb &cb);
+    static void handle_water_depth(AP_UAVCAN* ap_uavcan, uint8_t node_id, const WaterDepthCb &cb);
 
 private:
     static bool take_registry();
     static void give_registry();
-
-    uint8_t _instance;
 
     bool new_water_depth;
     float _water_depth;
