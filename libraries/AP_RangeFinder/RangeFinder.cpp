@@ -34,6 +34,7 @@
 #include "AP_RangeFinder_VL53L0X.h"
 #include "AP_RangeFinder_VL53L1X.h"
 #include "AP_RangeFinder_NMEA.h"
+#include "AP_RangeFinder_NMEA2K.h"
 #include "AP_RangeFinder_Wasp.h"
 #include "AP_RangeFinder_Benewake.h"
 #include "AP_RangeFinder_PWM.h"
@@ -787,6 +788,12 @@ void RangeFinder::detect_instance(uint8_t instance, uint8_t& serial_instance)
     case RangeFinder_TYPE_PWM:
         if (AP_RangeFinder_PWM::detect()) {
             drivers[instance] = new AP_RangeFinder_PWM(state[instance]);
+        }
+        break;
+    case RangeFinder_TYPE_NMEA2K:
+        if (hal.can_mgr->is_initialized()) {
+            // TODO how to pass uavcan
+            //drivers[instance] = new AP_RangeFinder_NMEA2K(state[instance], uavcan);
         }
         break;
     default:

@@ -23,7 +23,10 @@ HAL_Semaphore AP_RangeFinder_NMEA2K::_sem_registry;
  */
 AP_RangeFinder_NMEA2K::AP_RangeFinder_NMEA2K(RangeFinder::RangeFinder_State &_state) :
     AP_RangeFinder_Backend(_state)
-{}
+{
+    // TODO how to subscribe_msgs
+    // subscribe_msgs
+}
 
 void AP_RangeFinder_NMEA2K::subscribe_msgs(AP_UAVCAN* ap_uavcan)
 {
@@ -31,6 +34,8 @@ void AP_RangeFinder_NMEA2K::subscribe_msgs(AP_UAVCAN* ap_uavcan)
         return;
     }
 
+    printf("nmea subscribe msgs");
+    
     auto* node = ap_uavcan->get_node();
 
     uavcan::Subscriber<uavcan::equipment::sonner::WaterDepth, WaterDepthCb> *water_depth_listener;
@@ -53,38 +58,38 @@ void AP_RangeFinder_NMEA2K::give_registry()
     _sem_registry.give();
 }
 
-// AP_RangeFinder_Backend* AP_RangeFinder_NMEA2K::probe(RangeFinder &rangefinder)
-// {
-//     if (!take_registry()) {
-//         return nullptr;
-//     }
-//     AP_RangeFinder_Backend* backend = nullptr;
-//     for (uint8_t i = 0; i < RANGEFINDER_MAX_INSTANCES; i++) {
-//         if (_detected_modules[i].driver == nullptr && _detected_modules[i].ap_uavcan != nullptr) {
-//             backend = new AP_RangeFinder_NMEA2K(rangefinder);
-//             if (backend == nullptr) {
-//                 debug_water_depth_uavcan(2,
-//                                   _detected_modules[i].ap_uavcan->get_driver_index(),
-//                                   "Failed register UAVCAN Baro Node %d on Bus %d\n",
-//                                   _detected_modules[i].node_id,
-//                                   _detected_modules[i].ap_uavcan->get_driver_index());
-//             } else {
-//                 _detected_modules[i].driver = backend;
-//                 backend->_ap_uavcan = _detected_modules[i].ap_uavcan;
-//                 backend->_node_id = _detected_modules[i].node_id;
-//                 backend->register_sensor();
-//                 debug_water_depth_uavcan(2,
-//                                   _detected_modules[i].ap_uavcan->get_driver_index(),
-//                                   "Registered UAVCAN Baro Node %d on Bus %d\n",
-//                                   _detected_modules[i].node_id,
-//                                   _detected_modules[i].ap_uavcan->get_driver_index());
-//             }
-//             break;
-//         }
-//     }
-//     give_registry();
-//     return backend;
-// }
+AP_RangeFinder_Backend* AP_RangeFinder_NMEA2K::probe(RangeFinder &rangefinder)
+{
+    if (!take_registry()) {
+        return nullptr;
+    }
+    AP_RangeFinder_Backend* backend = nullptr;
+    for (uint8_t i = 0; i < RANGEFINDER_MAX_INSTANCES; i++) {
+        if (_detected_modules[i].driver == nullptr && _detected_modules[i].ap_uavcan != nullptr) {
+            backend = new AP_RangeFinder_NMEA2K(rangefinder);
+            if (backend == nullptr) {
+                debug_water_depth_uavcan(2,
+                                  _detected_modules[i].ap_uavcan->get_driver_index(),
+                                  "Failed register UAVCAN Baro Node %d on Bus %d\n",
+                                  _detected_modules[i].node_id,
+                                  _detected_modules[i].ap_uavcan->get_driver_index());
+            } else {
+                _detected_modules[i].driver = backend;
+                backend->_ap_uavcan = _detected_modules[i].ap_uavcan;
+                backend->_node_id = _detected_modules[i].node_id;
+                backend->register_sensor();
+                debug_water_depth_uavcan(2,
+                                  _detected_modules[i].ap_uavcan->get_driver_index(),
+                                  "Registered UAVCAN Baro Node %d on Bus %d\n",
+                                  _detected_modules[i].node_id,
+                                  _detected_modules[i].ap_uavcan->get_driver_index());
+            }
+            break;
+        }
+    }
+    give_registry();
+    return backend;
+}
 
 AP_RangeFinder_NMEA2K* AP_RangeFinder_NMEA2K::get_uavcan_backend(AP_UAVCAN* ap_uavcan, uint8_t node_id, bool create_new)
 {
@@ -125,6 +130,7 @@ AP_RangeFinder_NMEA2K* AP_RangeFinder_NMEA2K::get_uavcan_backend(AP_UAVCAN* ap_u
 
 void AP_RangeFinder_NMEA2K::handle_water_depth(AP_UAVCAN* ap_uavcan, uint8_t node_id, const WaterDepthCb &cb)
 {
+    printf("handle_water_depth");
     if (take_registry()) {
         AP_RangeFinder_NMEA2K* driver = get_uavcan_backend(ap_uavcan, node_id, true);
         if (driver == nullptr) {
@@ -132,6 +138,7 @@ void AP_RangeFinder_NMEA2K::handle_water_depth(AP_UAVCAN* ap_uavcan, uint8_t nod
             return;
         }
         {
+            printf("water_depth: %f\r\n", cb.msg->water_depth);
             WITH_SEMAPHORE(driver->_sem_baro);
             driver->_water_depth = cb.msg->water_depth;
             driver->new_water_depth = true;
