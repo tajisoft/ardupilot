@@ -5,6 +5,7 @@
 #include <GCS_MAVLink/GCS_MAVLink.h>
 #include <AP_Math/AP_Math.h>
 #include <AP_Mission/AP_Mission.h>
+#include <AP_WheelEncoder/AP_WheelEncoder.h>
 
 #include "defines.h"
 
@@ -31,7 +32,8 @@ public:
         RTL          = 11,
         SMART_RTL    = 12,
         GUIDED       = 15,
-        INITIALISING = 16
+        INITIALISING = 16,
+        BRAKE        = 17
     };
 
     // Constructor
@@ -589,3 +591,22 @@ private:
     float _desired_heading_cd;  // latest desired heading (in centi-degrees) from pilot
 };
 
+class ModeBrake : public Mode
+{
+public:
+
+    uint32_t mode_number() const override { return BRAKE; }
+    const char *name4() const override { return "BRAK"; }
+
+    // methods that affect movement of the vehicle in this mode
+    void update() override;
+    void init_heading();
+
+protected:
+    bool _enter() override;
+
+private:
+
+    float _desired_angle_rad[WHEELENCODER_MAX_INSTANCES];  // distance in radians at time of last update to EKF
+    uint32_t _last_update_ms[WHEELENCODER_MAX_INSTANCES];  // system time of last ping from each encoder
+};
