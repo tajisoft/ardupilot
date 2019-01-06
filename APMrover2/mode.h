@@ -600,13 +600,13 @@ public:
 
     // methods that affect movement of the vehicle in this mode
     void update() override;
-    void init_heading();
 
 protected:
     bool _enter() override;
 
 private:
 
-    float _desired_angle_rad[WHEELENCODER_MAX_INSTANCES];  // distance in radians at time of last update to EKF
-    uint32_t _last_update_ms[WHEELENCODER_MAX_INSTANCES];  // system time of last ping from each encoder
+    struct Location _brake_point;
+    float _brake_heading_cd;
+    float _brake_pitch;
 };

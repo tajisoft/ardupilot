@@ -5,26 +5,25 @@
 
 bool ModeBrake::_enter()
 {
-    // save current wheel encoder rad
-    for (int i = 0; i < WHEELENCODER_MAX_INSTANCES; i++) {
-        _desired_angle_rad[i] = rover.wheel_encoder_last_angle_rad[i];
-        _last_update_ms[i] = rover.wheel_encoder_last_update_ms[i];
+    if (rover.is_boat() || !rover.have_position) {
+        return false;
     }
+
+    _brake_heading_cd = ahrs.yaw_sensor;
+    _brake_point = rover.current_loc;
+    _brake_pitch = ahrs.pitch_sensor;
 
     return true;
 }
 
 void ModeBrake::update()
 {
-    for (int i = 0; i < WHEELENCODER_MAX_INSTANCES; i++) {
-        float d_angle = rover.wheel_encoder_last_angle_rad[i] - _desired_angle_rad[i];
-        // less than 3deg
-        if (d_angle < 3.0) {
-            continue;
-        }
-
-        float throttle = g2.attitude_control.get_throttle_out_from_pitch(-d_angle, 0, g2.motors.limit.throttle_lower, g2.motors.limit.throttle_upper, rover.G_Dt) * 100.0f;
-        g2.motors.set_steering(0.0f);
-        g2.motors.set_throttle(throttle);
+    if (get_distance_cm(rover.current_loc, _brake_point) > 5) {
+        set_desired_location(_brake_point);
     }
+    int32_t diff_pitch = ahrs.pitch_sensor - _brake_pitch;
+    if (abs(diff_pitch) > 5) {
+        calc_throttle((diff_pitch < 0 ? -diff_pitch : diff_pitch) * 10, false, true);
+    }
+    calc_steering_to_heading(_brake_heading_cd);
 }
