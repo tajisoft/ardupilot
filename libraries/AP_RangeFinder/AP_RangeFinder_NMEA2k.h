@@ -1,7 +1,7 @@
 #pragma once
 
+#include "RangeFinder.h"
 #include "RangeFinder_Backend.h"
-#include "CAN.h"
 
 #include <AP_Common/Semaphore.h>
 #include <AP_UAVCAN/AP_UAVCAN.h>
@@ -10,17 +10,25 @@ class WaterDepthCb;
 
 class AP_RangeFinder_NMEA2K : public AP_RangeFinder_Backend {
 public:
+    // constructor
     AP_RangeFinder_NMEA2K(RangeFinder::RangeFinder_State &_state);
-
-    bool detect(CANManager *_manager);
 
     void update() override;
 
+    // static detection function
+    static bool detect();
+
     static void subscribe_msgs(AP_UAVCAN* ap_uavcan);
     static AP_RangeFinder_NMEA2K* get_uavcan_backend(AP_UAVCAN* ap_uavcan, uint8_t node_id, bool create_new);
-    static AP_RangeFinder_Backend* probe(RangeFinder &rangefinder);
+    static AP_RangeFinder_NMEA2K* probe(RangeFinder::RangeFinder_State &rangefinder);
 
     static void handle_water_depth(AP_UAVCAN* ap_uavcan, uint8_t node_id, const WaterDepthCb &cb);
+
+protected:
+
+    virtual MAV_DISTANCE_SENSOR _get_mav_distance_sensor_type() const override {
+        return MAV_DISTANCE_SENSOR_ULTRASOUND;
+    }
 
 private:
     static bool take_registry();

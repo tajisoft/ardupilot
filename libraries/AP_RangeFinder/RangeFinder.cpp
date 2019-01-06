@@ -39,6 +39,7 @@
 #include "AP_RangeFinder_Benewake.h"
 #include "AP_RangeFinder_PWM.h"
 #include <AP_BoardConfig/AP_BoardConfig.h>
+#include <AP_UAVCAN/AP_UAVCAN.h>
 
 extern const AP_HAL::HAL &hal;
 
@@ -791,9 +792,10 @@ void RangeFinder::detect_instance(uint8_t instance, uint8_t& serial_instance)
         }
         break;
     case RangeFinder_TYPE_NMEA2K:
-        if (hal.can_mgr->is_initialized()) {
+        if (AP_RangeFinder_NMEA2K::detect()) {
             // TODO how to pass uavcan
-            //drivers[instance] = new AP_RangeFinder_NMEA2K(state[instance], uavcan);
+            // drivers[instance] = AP_RangeFinder_NMEA2K::probe(state[instance]);
+            //_add_backend(AP_RangeFinder_NMEA2K::probe(state[instance], hal.can_mgr));
         }
         break;
     default:
