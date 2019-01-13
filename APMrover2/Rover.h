@@ -381,11 +381,17 @@ private:
     enum Crash_Stage {
         CrashStage_None      = 0,
         CrashStage_Detected  = 1,
-        CrashStage_Recovery   = 2,
+        CrashStage_Recovery  = 2,
         CrashStage_Emergency = 3
+    };
+    enum Crash_Action {
+        CrashAction_Stay       = 0,
+        CrashAction_Back       = 1,
+        CrashAction_ChangeMode = 2
     };
     typedef struct {
         uint16_t recovery_counter;
+        Mode *recovery_mode;
         uint32_t detected_angle_ms;
         uint32_t detected_vel_ms;
         Crash_Stage stage;

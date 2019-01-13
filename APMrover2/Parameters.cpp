@@ -694,7 +694,7 @@ const AP_Param::GroupInfo ParametersG2::var_info[] = {
     // @Param: CRASH_RECOVER_ACTION
     // @DisplayName: Crash Recover Action
     // @Description: Enable crash recovery action. Zero do nothing
-    // @Values: 0:Disable,1:Enable
+    // @Values: 0:Wait, 1:Back
     // @User: Standard
     AP_GROUPINFO("CRSH_RCVR_ACTION", 40, ParametersG2, crash_recover_action, 0),
 

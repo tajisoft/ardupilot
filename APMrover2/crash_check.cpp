@@ -88,6 +88,10 @@ void Rover::crash_action()
         crashcheck.detected_angle_ms = -1;
         crashcheck.detected_vel_ms = -1;
 
+        if (crashcheck.recovery_counter == 1) {
+            crashcheck.recovery_mode = control_mode;
+        }
+
         // recvery action
         if (!crash_recovery_action()) {
             crashcheck.stage = CrashStage_Emergency;
@@ -108,7 +112,20 @@ void Rover::crash_action()
 
 bool Rover::crash_recovery_action()
 {
-    // TODO WAIT or BACK? or STEERING?
+    if (crashcheck.recovery_counter > 20) {
+        set_mode(*(crashcheck.recovery_mode), MODE_REASON_CRASH_RECOVERY);
+        crash_check_init();
+        return true;
+    }
+
+    switch (g2.crash_recover_action) {
+    case CrashAction_Stay:
+        set_mode(mode_hold, MODE_REASON_CRASH_RECOVERY);
+        break;
+    case CrashAction_Back:
+        // TODO vehicle go back
+        break;
+    }
     return true;
 }
 
