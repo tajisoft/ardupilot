@@ -3,8 +3,10 @@
 #include "RangeFinder.h"
 #include "RangeFinder_Backend.h"
 
-#define RANGEFINDER_TRDUO_FAST_TIMEOUT_MS            200  // requests timeout after 0.3 seconds for fast mode
-#define RANGEFINDER_TRDUO_PRECISE_TIMEOUT_MS         1200  // requests timeout after 0.3 seconds for precise mode
+#define TERARANGER_DUO_BUFFER_SIZE_HALF 4
+#define TERARANGER_DUO_BUFFER_SIZE_FULL 7
+#define TERARANGER_DUO_VALUE_TO_CM_FACTOR 10
+#define RANGEFINDER_TRDUO_TIMEOUT_MS            1000  // requests timeout after 0.3 seconds for fast mode
 
 class AP_RangeFinder_TeraRangerDuo : public AP_RangeFinder_Backend
 {
@@ -37,7 +39,7 @@ protected:
 private:
 
     // set sensor mode
-    bool set_sensor_mode();
+    void set_sensor_mode();
     // check and process replies from sensor
     bool read_sensor_data();
     uint16_t process_distance(uint8_t buf1, uint8_t buf2);
@@ -47,8 +49,6 @@ private:
     
     // mode init flag
     bool _mode_inited;
-    uint8_t _buffer_count;
     uint8_t _buffer[7];
-    // request related variables
-    uint32_t _last_distance_received_ms;    // system time of last distance measurement received from sensor
+    uint8_t _buffer_count;
 };

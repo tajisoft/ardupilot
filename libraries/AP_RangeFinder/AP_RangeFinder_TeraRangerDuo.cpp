@@ -16,6 +16,7 @@
 #include <AP_HAL/AP_HAL.h>
 #include "AP_RangeFinder_TeraRangerDuo.h"
 #include <AP_SerialManager/AP_SerialManager.h>
+#include <GCS_MAVLink/GCS.h>
 #include <AP_Math/crc.h>
 #include <ctype.h>
 #include <stdio.h>
@@ -53,40 +54,43 @@ void AP_RangeFinder_TeraRangerDuo::update(void)
         return;
     }
 
-    if (!_mode_inited && !set_sensor_mode()) {
+    if (!_mode_inited) {
+        set_sensor_mode();
         return;
     }
 
     // process incoming messages
-    read_sensor_data();
-
-    // check for timeout and set health status
-    if ((_last_distance_received_ms == 0) ||
-        (params.trduo_mode == TeraRangerDuoMode::Fast_Mode && (AP_HAL::millis() - _last_distance_received_ms > RANGEFINDER_TRDUO_FAST_TIMEOUT_MS)) ||
-        (params.trduo_mode == TeraRangerDuoMode::Precise_Mode && (AP_HAL::millis() - _last_distance_received_ms > RANGEFINDER_TRDUO_PRECISE_TIMEOUT_MS))) {
+    if (read_sensor_data()) {
+        if ((int16_t)state.distance_cm > params.max_distance_cm) {
+            gcs().send_text(MAV_SEVERITY_INFO, "TERA outrange high");
+            set_status(RangeFinder::RangeFinder_OutOfRangeHigh);
+        } else if ((int16_t)state.distance_cm < params.min_distance_cm) {
+            set_status(RangeFinder::RangeFinder_OutOfRangeLow);
+            gcs().send_text(MAV_SEVERITY_INFO, "TERA outrange low");
+        } else {
+            set_status(RangeFinder::RangeFinder_Good);
+            gcs().send_text(MAV_SEVERITY_INFO, "TERA outrange good");
+        }
+    } else if (AP_HAL::millis() - state.last_reading_ms > RANGEFINDER_TRDUO_TIMEOUT_MS) {
         set_status(RangeFinder::RangeFinder_NoData);
-    } else {
-        set_status(RangeFinder::RangeFinder_Good);
+        gcs().send_text(MAV_SEVERITY_INFO, "TERA outrange no data");
     }
 }
 
-bool AP_RangeFinder_TeraRangerDuo::set_sensor_mode()
+void AP_RangeFinder_TeraRangerDuo::set_sensor_mode()
 {
     if (uart == nullptr) {
-        return false;
+        return;
     }
 
-    if (params.trduo_mode == TeraRangerDuoMode::Fast_Mode) {
-        uart->write('F');
-    } else if (params.trduo_mode == TeraRangerDuoMode::Precise_Mode) {
-        uart->write('P');
-    }
+    // set preceise mode
+    uart->write('P');
     // set pinout mode to binary
     uart->write('B');
-    
-    _mode_inited = true;
+    uart->flush();
 
-    return true;
+    _mode_inited = true;
+    gcs().send_text(MAV_SEVERITY_INFO, "TERA mode_inited");
 }
 
 // check for replies from sensor, returns true if at least one message was processed
@@ -96,34 +100,39 @@ bool AP_RangeFinder_TeraRangerDuo::read_sensor_data()
         return false;
     }
 
+    bool found_start = false;
     uint16_t message_count = 0;
     int16_t nbytes = uart->available();
 
     while (nbytes-- > 0) {
         char c = uart->read();
-        if (c == 'T' ) {
+        if (c == 'T') {
             _buffer_count = 0;
+            found_start = true;
+            gcs().send_text(MAV_SEVERITY_NOTICE, "TERA found T");
+        }
+
+        if (!found_start) {
+            continue;
         }
 
         _buffer[_buffer_count++] = c;
-
-        // we should always read 7 bytes TxxSxxCRC
-        if (_buffer_count >= 6){
-            _buffer_count = 0;
-
+        
+        if (_buffer_count >= TERARANGER_DUO_BUFFER_SIZE_FULL) {
+            gcs().send_text(MAV_SEVERITY_INFO, "TERA T %x %x %x %x %x %x %x", _buffer[0], _buffer[1], _buffer[2], _buffer[3], _buffer[4], _buffer[5], _buffer[6]);
             // check if message has right CRC
-            if (crc_crc8(_buffer, 6) == _buffer[6]){
+            if (crc_crc8(_buffer, TERARANGER_DUO_BUFFER_SIZE_FULL - 1) == _buffer[TERARANGER_DUO_BUFFER_SIZE_FULL - 1]){
                 uint16_t t_distance = process_distance(_buffer[1], _buffer[2]);
                 uint16_t s_distance = process_distance(_buffer[4], _buffer[5]);
+                
+                state.distance_cm = (t_distance + s_distance) / 2;
 
-                hal.console->printf("duo tof distance %d\n", t_distance);
-                hal.console->printf("duo sonar distance %d\r\n", s_distance);
-
-                state.distance_cm = (t_distance + s_distance) / 20;
-                _last_distance_received_ms = AP_HAL::millis();
-
-                message_count++;
+                gcs().send_text(MAV_SEVERITY_INFO, "TERA %d + %d / 2 = %d", t_distance, s_distance, state.distance_cm);
+                state.last_reading_ms = AP_HAL::millis();
             }
+            message_count++;
+            _buffer_count = 0;
+            found_start = false;
         }
     }
     return (message_count > 0);
@@ -131,5 +140,8 @@ bool AP_RangeFinder_TeraRangerDuo::read_sensor_data()
 
 uint16_t AP_RangeFinder_TeraRangerDuo::process_distance(uint8_t buf1, uint8_t buf2)
 {
-    return (buf1 << 8) + buf2;
+    uint16_t val = buf1 << 8;
+    val |= buf2;
+
+    return val / TERARANGER_DUO_VALUE_TO_CM_FACTOR;
 }

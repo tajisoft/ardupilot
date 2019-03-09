@@ -131,13 +131,6 @@ const AP_Param::GroupInfo AP_RangeFinder_Params::var_info[] = {
     // @User: Advanced
     AP_GROUPINFO("ORIENT", 53, AP_RangeFinder_Params, orientation, ROTATION_PITCH_270),
 
-    // @Param: TRDUO_MODE
-    // @DisplayName: TeraRanger DUO mode
-    // @Description: Operating mode of TeraRanger DUO
-    // @Values: 0:Fast, 1:Pricise
-    // @User: Advanced
-    AP_GROUPINFO("TR_MODE", 54, AP_RangeFinder_Params, trduo_mode, 0),
-
     AP_GROUPEND
 };
 

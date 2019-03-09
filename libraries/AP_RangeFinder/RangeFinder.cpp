@@ -494,6 +494,11 @@ void RangeFinder::detect_instance(uint8_t instance, uint8_t& serial_instance)
             drivers[instance] = new AP_RangeFinder_PWM(state[instance], params[instance], estimated_terrain_height);
         }
         break;
+    case RangeFinder_TYPE_RTDUO:
+        if (AP_RangeFinder_TeraRangerDuo::detect(serial_manager, serial_instance)) {
+            drivers[instance] = new AP_RangeFinder_TeraRangerDuo(state[instance], params[instance], serial_manager, serial_instance++);
+        }
+        break;
     default:
         break;
     }
