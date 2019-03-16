@@ -84,7 +84,7 @@ bool AP_RangeFinder_TeraRangerDuo::get_reading(uint16_t &distance_cm)
 
     uint16_t message_count = 0;
     int16_t nbytes = uart->available();
-    
+
     while (nbytes-- > 0) {
         char c = uart->read();
         if (c == 'T') {
