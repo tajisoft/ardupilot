@@ -20,8 +20,6 @@
 #include <ctype.h>
 #include <stdio.h>
 
-extern const AP_HAL::HAL& hal;
-
 /* 
    The constructor also initialises the rangefinder. Note that this
    constructor is not called until detect() returns true, so we
@@ -103,8 +101,26 @@ bool AP_RangeFinder_TeraRangerDuo::get_reading(uint16_t &distance_cm)
             if (crc_crc8(_buffer, TERARANGER_DUO_BUFFER_SIZE_FULL - 1) == _buffer[TERARANGER_DUO_BUFFER_SIZE_FULL - 1]){
                 uint16_t t_distance = process_distance(_buffer[1], _buffer[2]);
                 uint16_t s_distance = process_distance(_buffer[4], _buffer[5]);
-                
-                distance_cm = (t_distance + s_distance) / 2;
+
+                // usualy we use sound range
+                uint32_t now = AP_HAL::millis();
+                if (is_valid_range(s_distance, true)) {
+                    if (now - _last_reading_sound_ms > RANGEFINDER_TRDUO_TIMEOUT_MS) {
+                        _sound_count = 0;
+                    }
+                    _average_sound[_sound_count++] = s_distance;
+                    distance_cm = averate(true);
+                    _last_reading_ms = now;
+                } else {
+                    if (is_valid_range(t_distance, false)) {
+                        if (now - _last_reading_tof_ms > RANGEFINDER_TRDUO_TIMEOUT_MS) {
+                            _tof_count = 0;
+                        }
+                        _average_tof[_tof_count++] = t_distance;
+                        distance_cm = averate(false);
+                        _last_reading_ms = now;
+                    }
+                }
             }
             message_count++;
             _buffer_count = 0;
@@ -112,6 +128,40 @@ bool AP_RangeFinder_TeraRangerDuo::get_reading(uint16_t &distance_cm)
         }
     }
     return (message_count > 0);
+}
+
+uint16_t AP_RangeFinder_TeraRangerDuo::averate(bool is_sound)
+{
+    uint8_t idx = _tof_count - 1;
+    uint32_t total = 0;
+    if (is_sound) {
+        idx = _sound_count - 1;
+    }
+    while (idx > 0) {
+        if (is_sound) {
+            total += _average_sound[idx];
+        } else {
+            total += _average_tof[idx];
+        }
+    }
+    
+    if (is_sound) {
+        return total / _sound_count;
+    } else {
+        return total / _tof_count;
+    }
+}
+
+bool AP_RangeFinder_TeraRangerDuo::is_valid_range(uint16_t distance, bool is_sound)
+{
+    uint16_t min = TERARANGER_DUO_MIN_DISTANCE_TOF;
+    uint16_t max = TERARANGER_DUO_MAX_DISTANCE_TOF;
+    if (is_sound) {
+        min = TERARANGER_DUO_MIN_DISTANCE_ULTRASOUND;
+        max = TERARANGER_DUO_MAX_DISTANCE_ULTRASOUND;
+    }
+
+    return distance >= min && distance <= max;
 }
 
 uint16_t AP_RangeFinder_TeraRangerDuo::process_distance(uint8_t buf1, uint8_t buf2)

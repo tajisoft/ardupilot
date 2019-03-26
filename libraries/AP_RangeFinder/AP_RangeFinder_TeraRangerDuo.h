@@ -5,7 +5,11 @@
 
 #define TERARANGER_DUO_BUFFER_SIZE_FULL 7
 #define TERARANGER_DUO_VALUE_TO_CM_FACTOR 10
-#define RANGEFINDER_TRDUO_TIMEOUT_MS            300  // requests timeout after 0.3 seconds
+#define TERARANGER_DUO_MIN_DISTANCE_TOF 20
+#define TERARANGER_DUO_MAX_DISTANCE_TOF 1400
+#define TERARANGER_DUO_MIN_DISTANCE_ULTRASOUND 5
+#define TERARANGER_DUO_MAX_DISTANCE_ULTRASOUND 765
+#define RANGEFINDER_TRDUO_TIMEOUT_MS 500  // timeout 0.3 seconds
 
 class AP_RangeFinder_TeraRangerDuo : public AP_RangeFinder_Backend
 {
@@ -33,13 +37,24 @@ private:
     // check and process replies from sensor
     bool get_reading(uint16_t &distance_cm);
     uint16_t process_distance(uint8_t buf1, uint8_t buf2);
+    bool is_valid_range(uint16_t distance, bool is_sound);
+    uint16_t averate(bool is_sound);
     void update_status();
 
-    // reply related variables
+    // uart driver
     AP_HAL::UARTDriver *uart = nullptr;
     
-    // mode init flag
+    uint32_t _last_reading_ms;
+    uint32_t _last_reading_tof_ms;
+    uint32_t _last_reading_sound_ms;
+
+    // buffer
     uint8_t _buffer[7];
     uint8_t _buffer_count;
     bool _found_start;
+    // moving average
+    uint16_t _average_tof[5];
+    uint16_t _average_sound[5];
+    uint8_t _tof_count;
+    uint8_t _sound_count;
 };
