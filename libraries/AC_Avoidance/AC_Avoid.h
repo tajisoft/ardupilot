@@ -81,7 +81,8 @@ private:
     // behaviour types (see BEHAVE parameter)
     enum BehaviourType {
         BEHAVIOR_SLIDE = 0,
-        BEHAVIOR_STOP = 1
+        BEHAVIOR_STOP = 1,
+        BEHAVIOR_KEEP = 2,
     };
 
     /*

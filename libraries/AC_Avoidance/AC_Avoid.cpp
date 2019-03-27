@@ -457,6 +457,32 @@ void AC_Avoid::adjust_velocity_polygon(float kP, float accel_cmss, Vector2f &des
                 // i.e. do not adjust velocity.
                 return;
             }
+        } else if ((AC_Avoid::BehaviourType)_behavior.get() == BEHAVIOR_KEEP) {
+            // find intersection with line segment
+            Vector2f intersection;
+            if (Vector2f::segment_intersection(position_xy, stopping_point_plus_margin, start, end, intersection)) {
+                // vector from current position to point on current edge
+                Vector2f limit_direction = intersection - position_xy;
+                const float limit_distance_cm = limit_direction.length();
+                if (!is_zero(limit_distance_cm)) {
+                    if (limit_distance_cm <= margin_cm) {
+                        // we are within the margin so stop vehicle
+                        safe_vel.zero();
+                        // if vehicle is too close we should back to this edge
+                        if (margin_cm - limit_distance_cm >= 20) {
+                            limit_velocity(kP, accel_cmss, safe_vel, limit_direction, (margin_cm - limit_distance_cm), dt);
+                        }
+                    } else {
+                        // vehicle inside the given edge, adjust velocity to not violate this edge
+                        limit_direction /= limit_distance_cm;
+                        limit_velocity(kP, accel_cmss, safe_vel, limit_direction, MAX(limit_distance_cm - margin_cm, 0.0f), dt);
+                    }
+                } else {
+                    // We are exactly on the edge - treat this as a fence breach.
+                    // i.e. do not adjust velocity.
+                    return;
+                }
+            }
         } else {
             // find intersection with line segment
             Vector2f intersection;
