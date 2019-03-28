@@ -15,6 +15,7 @@
 #include "AP_RangeFinder_TeraRangerDuo.h"
 #include <AP_SerialManager/AP_SerialManager.h>
 #include <AP_Math/crc.h>
+#include <GCS_MAVLink/GCS.h>
 #include <ctype.h>
 #include <stdio.h>
 
@@ -26,7 +27,9 @@
 AP_RangeFinder_TeraRangerDuo::AP_RangeFinder_TeraRangerDuo(RangeFinder::RangeFinder_State &_state,
                                                            AP_SerialManager &serial_manager,
                                                            uint8_t serial_instance) :
-    AP_RangeFinder_Backend(_state)
+    AP_RangeFinder_Backend(_state),
+    _tof_count(0),
+    _sound_count(0)
 {
     uart = serial_manager.find_serial(AP_SerialManager::SerialProtocol_Rangefinder, serial_instance);
     if (uart != nullptr) {
@@ -101,21 +104,27 @@ bool AP_RangeFinder_TeraRangerDuo::get_reading(uint16_t &distance_cm)
 
                 // usualy we use sound range
                 uint32_t now = AP_HAL::millis();
+                gcs().send_text(MAV_SEVERITY_INFO, "distance sound %d tof %d", s_distance, t_distance);
                 if (is_valid_range(s_distance, true)) {
                     if (now - _last_reading_sound_ms > RANGEFINDER_TRDUO_TIMEOUT_MS) {
                         _sound_count = 0;
                     }
                     _average_sound[_sound_count++] = s_distance;
                     distance_cm = average(true);
+                    gcs().send_text(MAV_SEVERITY_INFO, "valid sound count %d average %d", _sound_count, s_distance);
                     _last_reading_ms = now;
                 } else {
+                    gcs().send_text(MAV_SEVERITY_INFO, "invalid sound");
                     if (is_valid_range(t_distance, false)) {
                         if (now - _last_reading_tof_ms > RANGEFINDER_TRDUO_TIMEOUT_MS) {
                             _tof_count = 0;
                         }
                         _average_tof[_tof_count++] = t_distance;
                         distance_cm = average(false);
+                        gcs().send_text(MAV_SEVERITY_INFO, "valid sound count %d average %d", _tof_count, t_distance);
                         _last_reading_ms = now;
+                    } else {
+                        gcs().send_text(MAV_SEVERITY_INFO, "invalid tof");
                     }
                 }
             }
@@ -129,16 +138,16 @@ bool AP_RangeFinder_TeraRangerDuo::get_reading(uint16_t &distance_cm)
 
 uint16_t AP_RangeFinder_TeraRangerDuo::average(bool is_sound)
 {
-    uint8_t idx = _tof_count - 1;
+    uint8_t idx = _tof_count;
     uint32_t total = 0;
     if (is_sound) {
-        idx = _sound_count - 1;
+        idx = _sound_count;
     }
-    while (idx > 0) {
+    while (idx-- > 0) {
         if (is_sound) {
-            total += _average_sound[idx];
+            total += _average_sound[idx - 1];
         } else {
-            total += _average_tof[idx];
+            total += _average_tof[idx - 1];
         }
     }
     
@@ -151,14 +160,11 @@ uint16_t AP_RangeFinder_TeraRangerDuo::average(bool is_sound)
 
 bool AP_RangeFinder_TeraRangerDuo::is_valid_range(uint16_t distance, bool is_sound)
 {
-    uint16_t min = TERARANGER_DUO_MIN_DISTANCE_TOF;
-    uint16_t max = TERARANGER_DUO_MAX_DISTANCE_TOF;
     if (is_sound) {
-        min = TERARANGER_DUO_MIN_DISTANCE_ULTRASOUND;
-        max = TERARANGER_DUO_MAX_DISTANCE_ULTRASOUND;
+        return distance >= TERARANGER_DUO_MIN_DISTANCE_ULTRASOUND && distance <= TERARANGER_DUO_MAX_DISTANCE_ULTRASOUND;
+    } else {
+        return distance >= TERARANGER_DUO_MIN_DISTANCE_TOF && distance <= TERARANGER_DUO_MAX_DISTANCE_TOF;
     }
-
-    return distance >= min && distance <= max;
 }
 
 uint16_t AP_RangeFinder_TeraRangerDuo::process_distance(uint8_t buf1, uint8_t buf2)
