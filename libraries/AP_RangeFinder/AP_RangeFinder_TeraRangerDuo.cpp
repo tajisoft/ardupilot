@@ -27,9 +27,7 @@
 AP_RangeFinder_TeraRangerDuo::AP_RangeFinder_TeraRangerDuo(RangeFinder::RangeFinder_State &_state,
                                                            AP_SerialManager &serial_manager,
                                                            uint8_t serial_instance) :
-    AP_RangeFinder_Backend(_state),
-    _tof_count(0),
-    _sound_count(0)
+    AP_RangeFinder_Backend(_state)
 {
     uart = serial_manager.find_serial(AP_SerialManager::SerialProtocol_Rangefinder, serial_instance);
     if (uart != nullptr) {
@@ -60,12 +58,12 @@ void AP_RangeFinder_TeraRangerDuo::update(void)
 // update status
 void AP_RangeFinder_TeraRangerDuo::update_status()
 {
-    if (AP_HAL::millis() - _last_reading_ms > RANGEFINDER_TRDUO_TIMEOUT_MS) {
+    if (AP_HAL::millis() - _last_reading_ms > TRDUO_TIMEOUT_MS) {
         set_status(RangeFinder::RangeFinder_NoData);
     } else {
-        if ((int16_t)state.distance_cm > TERARANGER_DUO_MAX_DISTANCE_TOF) {
+        if ((int16_t)state.distance_cm > TRDUO_MAX_DISTANCE_TOF) {
             set_status(RangeFinder::RangeFinder_OutOfRangeHigh);
-        } else if ((int16_t)state.distance_cm < TERARANGER_DUO_MIN_DISTANCE_ULTRASOUND) {
+        } else if ((int16_t)state.distance_cm < TRDUO_MIN_DISTANCE_SOUND) {
             set_status(RangeFinder::RangeFinder_OutOfRangeLow);
         } else {
             set_status(RangeFinder::RangeFinder_Good);
@@ -80,7 +78,10 @@ bool AP_RangeFinder_TeraRangerDuo::get_reading(uint16_t &distance_cm)
         return false;
     }
 
-    uint16_t message_count = 0;
+    float sum_tof = 0;
+    float sum_sound = 0;
+    uint16_t tof_count = 0;
+    uint16_t sound_count = 0;
     int16_t nbytes = uart->available();
 
     while (nbytes-- > 0) {
@@ -96,75 +97,39 @@ bool AP_RangeFinder_TeraRangerDuo::get_reading(uint16_t &distance_cm)
 
         _buffer[_buffer_count++] = c;
         
-        if (_buffer_count >= TERARANGER_DUO_BUFFER_SIZE_FULL) {
+        if (_buffer_count >= TRDUO_BUFFER_SIZE_FULL) {
             // check if message has right CRC
-            if (crc_crc8(_buffer, TERARANGER_DUO_BUFFER_SIZE_FULL - 1) == _buffer[TERARANGER_DUO_BUFFER_SIZE_FULL - 1]){
+            if (crc_crc8(_buffer, TRDUO_BUFFER_SIZE_FULL - 1) == _buffer[TRDUO_BUFFER_SIZE_FULL - 1]){
                 uint16_t t_distance = process_distance(_buffer[1], _buffer[2]);
                 uint16_t s_distance = process_distance(_buffer[4], _buffer[5]);
 
-                // usualy we use sound range
-                uint32_t now = AP_HAL::millis();
-                gcs().send_text(MAV_SEVERITY_INFO, "distance sound %d tof %d", s_distance, t_distance);
-                if (is_valid_range(s_distance, true)) {
-                    if (now - _last_reading_sound_ms > RANGEFINDER_TRDUO_TIMEOUT_MS) {
-                        _sound_count = 0;
-                    }
-                    _average_sound[_sound_count++] = s_distance;
-                    distance_cm = average(true);
-                    gcs().send_text(MAV_SEVERITY_INFO, "valid sound count %d average %d", _sound_count, s_distance);
-                    _last_reading_ms = now;
+                // check ToF distance range
+                if (t_distance > TRDUO_MIN_DISTANCE_TOF && t_distance < TRDUO_MAX_DISTANCE_TOF) {
+                    sum_tof += t_distance;
+                    tof_count++;
                 } else {
-                    gcs().send_text(MAV_SEVERITY_INFO, "invalid sound");
-                    if (is_valid_range(t_distance, false)) {
-                        if (now - _last_reading_tof_ms > RANGEFINDER_TRDUO_TIMEOUT_MS) {
-                            _tof_count = 0;
-                        }
-                        _average_tof[_tof_count++] = t_distance;
-                        distance_cm = average(false);
-                        gcs().send_text(MAV_SEVERITY_INFO, "valid sound count %d average %d", _tof_count, t_distance);
-                        _last_reading_ms = now;
-                    } else {
-                        gcs().send_text(MAV_SEVERITY_INFO, "invalid tof");
+                    // check sound distance range
+                    if (s_distance > TRDUO_MIN_DISTANCE_SOUND && s_distance < TRDUO_MAX_DISTANCE_SOUND) {
+                        sum_sound += s_distance;
+                        sound_count++;
                     }
                 }
             }
-            message_count++;
             _buffer_count = 0;
             _found_start = false;
         }
     }
-    return (message_count > 0);
-}
 
-uint16_t AP_RangeFinder_TeraRangerDuo::average(bool is_sound)
-{
-    uint8_t idx = _tof_count;
-    uint32_t total = 0;
-    if (is_sound) {
-        idx = _sound_count;
+    // we always use ToF(precise mode) distance
+    if (sum_tof > 0) {
+        distance_cm = sum_tof / tof_count;
+        return (tof_count > 0);
+    } else if (sum_sound > 0) {
+        distance_cm = sum_sound / sound_count;
+        return (sound_count > 0);
     }
-    while (idx-- > 0) {
-        if (is_sound) {
-            total += _average_sound[idx - 1];
-        } else {
-            total += _average_tof[idx - 1];
-        }
-    }
-    
-    if (is_sound) {
-        return total / _sound_count;
-    } else {
-        return total / _tof_count;
-    }
-}
 
-bool AP_RangeFinder_TeraRangerDuo::is_valid_range(uint16_t distance, bool is_sound)
-{
-    if (is_sound) {
-        return distance >= TERARANGER_DUO_MIN_DISTANCE_ULTRASOUND && distance <= TERARANGER_DUO_MAX_DISTANCE_ULTRASOUND;
-    } else {
-        return distance >= TERARANGER_DUO_MIN_DISTANCE_TOF && distance <= TERARANGER_DUO_MAX_DISTANCE_TOF;
-    }
+    return false;
 }
 
 uint16_t AP_RangeFinder_TeraRangerDuo::process_distance(uint8_t buf1, uint8_t buf2)
@@ -172,5 +137,5 @@ uint16_t AP_RangeFinder_TeraRangerDuo::process_distance(uint8_t buf1, uint8_t bu
     uint16_t val = buf1 << 8;
     val |= buf2;
 
-    return val / TERARANGER_DUO_VALUE_TO_CM_FACTOR;
+    return val / TRDUO_VALUE_TO_CM_FACTOR;
 }
