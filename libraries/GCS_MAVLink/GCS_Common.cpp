@@ -430,6 +430,8 @@ void GCS_MAVLINK::send_proximity() const
         }
     }
 
+    
+
     // send upward distance
     float dist_up;
     if (proximity->get_upward_distance(dist_up)) {
