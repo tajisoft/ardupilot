@@ -113,7 +113,10 @@ enum RTLState {
     RTL_ReturnHome,
     RTL_LoiterAtHome,
     RTL_FinalDescent,
-    RTL_Land
+    RTL_Land,
+//****************************// Y.T.
+    RTL_DescentPoint 
+//****************************
 };
 
 // Safe RTL states

@@ -1,4 +1,5 @@
 #include "Copter.h"
+#include "math.h"
 
 #if MODE_RTL_ENABLED == ENABLED
 
@@ -44,7 +45,7 @@ void ModeRTL::run(bool disarm_on_land)
     if (!motors->armed()) {
         return;
     }
-
+ 
     // check if we need to move to next state
     if (_state_complete) {
         switch (_state) {
@@ -71,6 +72,11 @@ void ModeRTL::run(bool disarm_on_land)
         case RTL_Land:
             // do nothing - rtl_land_run will take care of disarming motors
             break;
+//************************************************ Y.T.
+  	case RTL_DescentPoint: 
+           // do nothing
+	    break;
+//************************************************
         }
     }
 
@@ -88,7 +94,38 @@ void ModeRTL::run(bool disarm_on_land)
 
     case RTL_ReturnHome:
         climb_return_run();
+// ********************************************************************  Y.T.
+ 	if(wp_nav->get_wp_distance_to_destination() < 2500.0){
+//	const Vector3f &curr = _inav.get_position();
+ //   	return norm(_destination.x-curr.x,_destination.y-curr.y);
+//	dist = wp_nav->get_wp_distance_to_destination();	
+//	if(norm(_destination.x-curr.x,_destination.y-curr.y)<10000.0){ 
+//	   _state_complete=true;
+//	   _state = RTL_ReturnHome;
+	   _state = RTL_DescentPoint;		// change target alt
+	 //  _state_complete=true;
+ 				// descent target is below return target at rtl_alt_final   --> change target altitude up to 5 m
+ 	   rtl_path.descent_target = Location(rtl_path.return_target.lat, rtl_path.return_target.lng, MAX(g.rtl_alt_final-1000, 500), 		
+	 				      Location::AltFrame::ABOVE_HOME);
+	   wp_nav->set_wp_destination(rtl_path.descent_target);
+
+	}
+/*	if(_state_complete==true){
+		build_path2();
+		_state_complete=false;
+		_state = RTL_DescentPoint;
+	}
+*/	
+	break;
+
+    case RTL_DescentPoint:
+        climb_return_run();
+	if(wp_nav->get_wp_distance_to_destination() < 50.0){
+		_state_complete=true;
+		_state = RTL_ReturnHome;
+	}
         break;
+// *******************************************************************
 
     case RTL_LoiterAtHome:
         loiterathome_run();
@@ -101,6 +138,7 @@ void ModeRTL::run(bool disarm_on_land)
     case RTL_Land:
         land_run(disarm_on_land);
         break;
+
     }
 }
 
@@ -183,6 +221,8 @@ void ModeRTL::climb_return_run()
 
     // check if we've completed this stage of RTL
     _state_complete = wp_nav->reached_wp_destination();
+
+
 }
 
 // rtl_loiterathome_start - initialise return to home
@@ -397,7 +437,7 @@ void ModeRTL::land_run(bool disarm_on_land)
 }
 
 void ModeRTL::build_path()
-{
+{   wp_nav->get_wp_distance_to_destination();
     // origin point is our stopping point
     Vector3f stopping_point;
     pos_control->get_stopping_point_xy(stopping_point);
@@ -412,10 +452,15 @@ void ModeRTL::build_path()
     rtl_path.climb_target = Location(rtl_path.origin_point.lat, rtl_path.origin_point.lng, rtl_path.return_target.alt, rtl_path.return_target.get_alt_frame());
 
     // descent target is below return target at rtl_alt_final
-    rtl_path.descent_target = Location(rtl_path.return_target.lat, rtl_path.return_target.lng, g.rtl_alt_final, Location::AltFrame::ABOVE_HOME);
+//    rtl_path.descent_target = Location(rtl_path.return_target.lat, rtl_path.return_target.lng, g.rtl_alt_final, Location::AltFrame::ABOVE_HOME);
+
+	rtl_path.descent_target = Location(rtl_path.return_target.lat + (rtl_path.origin_point.lat - rtl_path.return_target.lat)/2,
+					   rtl_path.return_target.lng + (rtl_path.origin_point.lng - rtl_path.return_target.lng)/2, 
+					   g.rtl_alt_final, Location::AltFrame::ABOVE_HOME);
+
 
     // set land flag
-    rtl_path.land = g.rtl_alt_final <= 0;
+    rtl_path.land = g.rtl_alt_final <= 0;  // nomally false (Y.T.)
 }
 
 // compute the return target - home or rally point
@@ -505,6 +550,9 @@ bool ModeRTL::get_wp(Location& destination)
     case RTL_ReturnHome:
     case RTL_LoiterAtHome:
     case RTL_FinalDescent:
+//************************************Y.T.
+    case RTL_DescentPoint:
+//************************************
         return wp_nav->get_oa_wp_destination(destination);
     case RTL_Land:
         return false;
