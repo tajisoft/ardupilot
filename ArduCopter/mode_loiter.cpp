@@ -165,6 +165,10 @@ void ModeLoiter::run()
         // set motors to full range
         motors->set_desired_spool_state(AP_Motors::DesiredSpoolState::THROTTLE_UNLIMITED);
 
+#if WALL_SUCKER == ENABLED
+        sucker->update();
+#endif
+
 #if PRECISION_LANDING == ENABLED
         if (do_precision_loiter()) {
             precision_loiter_xy();

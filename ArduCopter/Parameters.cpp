@@ -605,6 +605,7 @@ const AP_Param::Info Copter::var_info[] = {
     // @Path: ../libraries/AC_Avoidance/AC_Avoid.cpp
 #if AC_AVOID_ENABLED == ENABLED
     GOBJECT(avoid,      "AVOID_",   AC_Avoid),
+    GOBJECT(avoid,      "Sucker_",   AC_Sucker),
 #endif
 
 #if AC_RALLY == ENABLED

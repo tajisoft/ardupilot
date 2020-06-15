@@ -98,6 +98,7 @@ const AP_Param::GroupInfo SITL::var_info[] = {
     AP_GROUPINFO("GPS2_TYPE",     61, SITL,  gps_type[1],  SITL::GPS_TYPE_UBLOX),
     AP_SUBGROUPEXTENSION("",      62, SITL,  var_info3),
     AP_SUBGROUPEXTENSION("",      63, SITL,  var_info2),
+    AP_GROUPINFO("SONAR_POS2",     64, SITL,  rngfnd2_pos_offset, 0),
     AP_GROUPEND
 };
 

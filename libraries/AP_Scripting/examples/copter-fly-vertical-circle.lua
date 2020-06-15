@@ -23,7 +23,7 @@ function update()
     stage = 0
     circle_angle = 0
   else
-    pwm6 = rc:get_pwm(6)
+    pwm6 = rc:get_pwm(7)
     if pwm6 and pwm6 > 1800 then    -- check if RC6 input has moved high
       if (stage == 0) then          -- change to guided mode
         if (vehicle:set_mode(copter_guided_mode_num)) then  -- change to Guided mode
@@ -51,9 +51,6 @@ function update()
 
         -- calculate velocity vector
         circle_angle = circle_angle + circle_angle_increment
-        if (circle_angle >= 360) then
-          stage = stage + 1
-        end
         local target_vel = Vector3f()
         local vel_xy = math.cos(math.rad(circle_angle)) * circle_speed
         target_vel:x(yaw_sin * vel_xy)

@@ -111,6 +111,7 @@ void RC_Channel_Copter::init_aux_function(const aux_func_t ch_option, const aux_
     case AUX_FUNC::SUPERSIMPLE_MODE:
     case AUX_FUNC::SURFACE_TRACKING:
     case AUX_FUNC::WINCH_ENABLE:
+    case AUX_FUNC::SUCKER:
         do_aux_function(ch_option, ch_flag);
         break;
     default:
@@ -383,6 +384,20 @@ void RC_Channel_Copter::do_aux_function(const aux_func_t ch_option, const aux_sw
             do_aux_function_change_mode(Mode::Number::THROW, ch_flag);
 #endif
             break;
+
+#if WALL_SUCKER == ENABLED && MODE_LOITER_ENABLED == ENABLED
+            switch (ch_flag) {
+                case HIGH:
+                    copter.mode_loiter.set_wall_sucker_enabled(true);
+                    break;
+                case MIDDLE:
+                    // nothing
+                    break;
+                case LOW:
+                    copter.mode_loiter.set_wall_sucker_enabled(false);
+                    break;
+            }
+#endif
 
         case AUX_FUNC::PRECISION_LOITER:
 #if PRECISION_LANDING == ENABLED && MODE_LOITER_ENABLED == ENABLED

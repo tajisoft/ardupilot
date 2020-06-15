@@ -86,6 +86,7 @@ public:
     uint16_t sonar_pin_value;    // pin 0
     uint16_t airspeed_pin_value; // pin 1
     uint16_t airspeed_2_pin_value; // pin 2
+    uint16_t sonar2_pin_value;    // pin 3
     uint16_t voltage_pin_value;  // pin 13
     uint16_t current_pin_value;  // pin 12
     uint16_t voltage2_pin_value;  // pin 15
@@ -118,6 +119,7 @@ private:
 
     void set_height_agl(void);
     void _update_rangefinder(float range_value);
+    void _update_rangefinder2(float range_value);
     void _set_signal_handlers(void) const;
 
     struct gps_data {

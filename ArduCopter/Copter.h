@@ -100,6 +100,7 @@
 
 #if AC_AVOID_ENABLED == ENABLED
  #include <AC_Avoidance/AC_Avoid.h>
+ #include <AC_Sucker/AC_Sucker.h>
 #endif
 #if AC_OAPATHPLANNER_ENABLED == ENABLED
  #include <AC_WPNav/AC_WPNav_OA.h>
@@ -188,6 +189,7 @@ public:
     friend class Parameters;
     friend class ParametersG2;
     friend class AP_Avoidance_Copter;
+    friend class AC_Sucker;
 
 #if ADVANCED_FAILSAFE == ENABLED
     friend class AP_AdvancedFailsafe_Copter;
@@ -491,6 +493,7 @@ private:
 
 #if AC_AVOID_ENABLED == ENABLED
     AC_Avoid avoid;
+    AC_Sucker sucker;
 #endif
 
     // Rally library

@@ -185,6 +185,7 @@ public:
         CAM_MODE_TOGGLE =    102, // Momentary switch to cycle camera modes
         EKF_LANE_SWITCH =    103, // trigger lane switch attempt
         EKF_YAW_RESET =      104, // trigger yaw reset attempt
+        SUCKER =             105, // Sucker mode
         // if you add something here, make sure to update the documentation of the parameter in RC_Channel.cpp!
         // also, if you add an option >255, you will need to fix duplicate_options_exist
 

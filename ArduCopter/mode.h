@@ -899,6 +899,10 @@ public:
     bool is_autopilot() const override { return false; }
     bool has_user_takeoff(bool must_navigate) const override { return true; }
 
+#if WALL_SUCKER == ENABLED
+    void set_wall_sucker_enabled(bool value) { _wall_sucker_enabled = value; }
+#endif
+
 #if PRECISION_LANDING == ENABLED
     void set_precision_loiter_enabled(bool value) { _precision_loiter_enabled = value; }
 #endif
@@ -917,6 +921,10 @@ protected:
 #endif
 
 private:
+
+#if WALL_SUCKER == ENABLED
+    bool _wall_sucker_enabled;
+#endif
 
 #if PRECISION_LANDING == ENABLED
     bool _precision_loiter_enabled;

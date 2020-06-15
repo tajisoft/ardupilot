@@ -126,6 +126,7 @@ public:
 
     const Vector3f &get_position() const { return position; }
     const float &get_range() const { return range; }
+    const float &get_range2() const { return range2; }
 
     void get_attitude(Quaternion &attitude) const {
         attitude.from_rotation_matrix(dcm);
@@ -171,6 +172,7 @@ protected:
     uint8_t rcin_chan_count = 0;
     float rcin[8];
     float range = -1.0f;                 // rangefinder detection in m
+    float range2 = -1.0f;
 
     struct {
         // data from simulated laser scanner, if available

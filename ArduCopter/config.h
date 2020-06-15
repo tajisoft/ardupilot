@@ -229,6 +229,12 @@
 #endif
 
 //////////////////////////////////////////////////////////////////////////////
+// Suck wall with two rangefinders
+#ifndef WALL_SUCKER
+ # define WALL_SUCKER ENABLED
+#endif
+
+//////////////////////////////////////////////////////////////////////////////
 // gripper - enabled only on larger firmwares
 #ifndef GRIPPER_ENABLED
  # define GRIPPER_ENABLED !HAL_MINIMIZE_FEATURES
