@@ -252,7 +252,7 @@ void NavEKF3_core::ResetHeight(void)
 
     // Reset the vertical velocity state using GPS vertical velocity if we are airborne
     // Check that GPS vertical velocity data is available and can be used
-    if (inFlight && !gpsNotAvailable && frontend->_fusionModeGPS == 0 && !frontend->inhibitGpsVertVelUse) {
+    if (inFlight && !gpsNotAvailable && (frontend->_sources.getVelZSource() == AP_NavEKF_Source::SourceZ::GPS) && !frontend->inhibitGpsVertVelUse) {
         stateStruct.velocity.z =  gpsDataNew.vel.z;
     } else if (inFlight && useExtNavVel && (activeHgtSource == HGT_SOURCE_EXTNAV)) {
         stateStruct.velocity.z = extNavVelDelayed.vel.z;
@@ -407,15 +407,18 @@ void NavEKF3_core::SelectVelPosFusion()
     // get data that has now fallen behind the fusion time horizon
     gpsDataToFuse = storedGPS.recall(gpsDataDelayed,imuDataDelayed.time_ms);
 
+    // detect position source changes
+    AP_NavEKF_Source::SourceXY pos_source = frontend->_sources.getPosXYSource();
+    if (pos_source != pos_source_last) {
+        pos_source_reset = true;
+        pos_source_last = pos_source;
+    }
+
     // Determine if we need to fuse position and velocity data on this time step
-    if (gpsDataToFuse && (PV_AidingMode == AID_ABSOLUTE) && (frontend->_fusionModeGPS != 3)) {
+    if (gpsDataToFuse && (PV_AidingMode == AID_ABSOLUTE) && (frontend->_sources.getPosXYSource() == AP_NavEKF_Source::SourceXY::GPS)) {
 
         // Don't fuse velocity data if GPS doesn't support it
-        if (frontend->_fusionModeGPS <= 1) {
-            fuseVelData = true;
-        } else {
-            fuseVelData = false;
-        }
+        fuseVelData = frontend->_sources.getVelXYSource() == AP_NavEKF_Source::SourceXY::GPS;
         fusePosData = true;
         extNavUsedForPos = false;
 
@@ -429,7 +432,7 @@ void NavEKF3_core::SelectVelPosFusion()
         }
         velPosObs[3] = gpsDataDelayed.pos.x;
         velPosObs[4] = gpsDataDelayed.pos.y;
-    } else if (extNavDataToFuse && (PV_AidingMode == AID_ABSOLUTE) && (frontend->_fusionModeGPS == 3)) {
+    } else if (extNavDataToFuse && (PV_AidingMode == AID_ABSOLUTE) && (frontend->_sources.getPosXYSource() == AP_NavEKF_Source::SourceXY::EXTNAV)) {
         // use external nav system for position
         extNavUsedForPos = true;
         activeHgtSource = HGT_SOURCE_EXTNAV;
@@ -450,7 +453,7 @@ void NavEKF3_core::SelectVelPosFusion()
 
     // fuse external navigation velocity data if available
     // extNavVelDelayed is already corrected for sensor position
-    if (extNavVelToFuse && (frontend->_fusionModeGPS == 3)) {
+    if (extNavVelToFuse && (frontend->_sources.getVelXYSource() == AP_NavEKF_Source::SourceXY::EXTNAV)) {
         fuseVelData = true;
         velPosObs[0] = extNavVelDelayed.vel.x;
         velPosObs[1] = extNavVelDelayed.vel.y;
@@ -466,7 +469,10 @@ void NavEKF3_core::SelectVelPosFusion()
     selectHeightForFusion();
 
     // if we are using GPS, check for a change in receiver and reset position and height
-    if (gpsDataToFuse && (PV_AidingMode == AID_ABSOLUTE) && (frontend->_fusionModeGPS != 3) && (gpsDataDelayed.sensor_idx != last_gps_idx)) {
+    if (gpsDataToFuse && (PV_AidingMode == AID_ABSOLUTE) && (frontend->_sources.getPosXYSource() == AP_NavEKF_Source::SourceXY::GPS) && (gpsDataDelayed.sensor_idx != last_gps_idx || pos_source_reset)) {
+        // mark a source reset as consumed
+        pos_source_reset = false;
+
         // record the ID of the GPS that we are using for the reset
         last_gps_idx = gpsDataDelayed.sensor_idx;
 
@@ -520,7 +526,9 @@ void NavEKF3_core::SelectVelPosFusion()
     }
 
     // check for external nav position reset
-    if (extNavDataToFuse && (PV_AidingMode == AID_ABSOLUTE) && (frontend->_fusionModeGPS == 3) && extNavDataDelayed.posReset) {
+    if (extNavDataToFuse && (PV_AidingMode == AID_ABSOLUTE) && (frontend->_sources.getPosXYSource() == AP_NavEKF_Source::SourceXY::EXTNAV) && (extNavDataDelayed.posReset || pos_source_reset)) {
+        // mark a source reset as consumed
+        pos_source_reset = false;
         ResetPositionNE(extNavDataDelayed.pos.x, extNavDataDelayed.pos.y);
         if (activeHgtSource == HGT_SOURCE_EXTNAV) {
             ResetPositionD(-hgtMea);
@@ -720,7 +728,7 @@ void NavEKF3_core::FuseVelPosNED()
             // test velocity measurements
             uint8_t imax = 2;
             // Don't fuse vertical velocity observations if inhibited by the user or if we are using synthetic data
-            if ((frontend->_fusionModeGPS > 0 || PV_AidingMode != AID_ABSOLUTE || frontend->inhibitGpsVertVelUse) && !useExtNavVel) {
+            if ((frontend->_sources.getVelZSource() == AP_NavEKF_Source::SourceZ::NONE || PV_AidingMode != AID_ABSOLUTE || frontend->inhibitGpsVertVelUse) && !useExtNavVel) {
                 imax = 1;
             }
             float innovVelSumSq = 0; // sum of squares of velocity innovations
