@@ -186,6 +186,7 @@ public:
         TER_DISABLE =         86, // disable terrain following in CRUISE/FBWB modes
         CROW_SELECT =         87, // select CROW mode for diff spoilers;high disables,mid forces progressive
         SOARING =             88, // three-position switch to set soaring mode
+        EKF_POS_SOURCE =      89, // change EKF position source between primary and seconds sources
 
         // entries from 100 onwards are expected to be developer
         // options used for testing
