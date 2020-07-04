@@ -438,14 +438,11 @@ void NavEKF3_core::SelectVelPosFusion()
             velPosObs[2] = gpsDataDelayed.vel.z;
         }
     } else if (extNavDataToFuse && (PV_AidingMode == AID_ABSOLUTE) && (frontend->_sources.getPosXYSource() == AP_NavEKF_Source::SourceXY::EXTNAV)) {
-        // use external nav system for position
+        // use external nav system for horizontal position
         extNavUsedForPos = true;
-        activeHgtSource = HGT_SOURCE_EXTNAV;
-        fuseHgtData = true;
         fusePosData = true;
         velPosObs[3] = extNavDataDelayed.pos.x;
         velPosObs[4] = extNavDataDelayed.pos.y;
-        velPosObs[5] = extNavDataDelayed.pos.z;
     }
 
     // fuse external navigation velocity data if available
@@ -1001,10 +998,7 @@ void NavEKF3_core::selectHeightForFusion()
 
     bool rangeFinderDataIsFresh = (imuSampleTime_ms - rngValidMeaTime_ms < 500);
     // select height source
-    if (extNavUsedForPos && (frontend->_sources.getPosZSource() == AP_NavEKF_Source::SourceZ::EXTNAV)) {
-        // always use external navigation as the height source if using for position.
-        activeHgtSource = AP_NavEKF_Source::SourceZ::EXTNAV;
-    } else if ((frontend->_sources.getPosZSource() == AP_NavEKF_Source::SourceZ::RANGEFINDER) && _rng && rangeFinderDataIsFresh) {
+    if ((frontend->_sources.getPosZSource() == AP_NavEKF_Source::SourceZ::RANGEFINDER) && _rng && rangeFinderDataIsFresh) {
         // user has specified the range finder as a primary height source
         activeHgtSource = AP_NavEKF_Source::SourceZ::RANGEFINDER;
     } else if ((frontend->_useRngSwHgt > 0) && ((frontend->_sources.getPosZSource() == AP_NavEKF_Source::SourceZ::BARO) || (frontend->_sources.getPosZSource() == AP_NavEKF_Source::SourceZ::GPS)) && _rng && rangeFinderDataIsFresh) {
@@ -1051,6 +1045,8 @@ void NavEKF3_core::selectHeightForFusion()
         activeHgtSource = AP_NavEKF_Source::SourceZ::GPS;
     } else if ((frontend->_sources.getPosZSource() == AP_NavEKF_Source::SourceZ::BEACON) && validOrigin && rngBcnGoodToAlign) {
         activeHgtSource = AP_NavEKF_Source::SourceZ::BEACON;
+    } else if ((frontend->_sources.getPosZSource() == AP_NavEKF_Source::SourceZ::EXTNAV) && ((imuSampleTime_ms - extNavMeasTime_ms) < 500)) {
+        activeHgtSource = AP_NavEKF_Source::SourceZ::EXTNAV;
     }
 
     // Use Baro alt as a fallback if we lose range finder, GPS, external nav or Beacon
@@ -1091,7 +1087,9 @@ void NavEKF3_core::selectHeightForFusion()
     // Select the height measurement source
     if (extNavDataToFuse && (activeHgtSource == AP_NavEKF_Source::SourceZ::EXTNAV)) {
         hgtMea = -extNavDataDelayed.pos.z;
+        velPosObs[5] = -hgtMea;
         posDownObsNoise = sq(constrain_float(extNavDataDelayed.posErr, 0.1f, 10.0f));
+        fuseHgtData = true;
     } else if (rangeDataToFuse && (activeHgtSource == AP_NavEKF_Source::SourceZ::RANGEFINDER)) {
         // using range finder data
         // correct for tilt using a flat earth model
