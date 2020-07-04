@@ -341,7 +341,7 @@ void NavEKF3_core::InitialiseVariables()
     delAngBiasLearned = false;
     memset(&filterStatus, 0, sizeof(filterStatus));
     gpsInhibit = false;
-    activeHgtSource = 0;
+    activeHgtSource = AP_NavEKF_Source::SourceZ::BARO;
     memset(&rngMeasIndex, 0, sizeof(rngMeasIndex));
     memset(&storedRngMeasTime_ms, 0, sizeof(storedRngMeasTime_ms));
     memset(&storedRngMeas, 0, sizeof(storedRngMeas));
