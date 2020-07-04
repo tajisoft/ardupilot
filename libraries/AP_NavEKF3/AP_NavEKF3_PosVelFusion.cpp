@@ -427,8 +427,9 @@ void NavEKF3_core::SelectVelPosFusion()
         extNavUsedForPos = false;
 
         CorrectGPSForAntennaOffset(gpsDataDelayed);
+        velPosObs[3] = gpsDataDelayed.pos.x;
+        velPosObs[4] = gpsDataDelayed.pos.y;
 
-        // copy corrected GPS data to observation vector
         // Don't fuse velocity data if GPS doesn't support it
         fuseVelData = frontend->_sources.getVelXYSource() == AP_NavEKF_Source::SourceXY::GPS;
         if (fuseVelData) {
@@ -436,8 +437,6 @@ void NavEKF3_core::SelectVelPosFusion()
             velPosObs[1] = gpsDataDelayed.vel.y;
             velPosObs[2] = gpsDataDelayed.vel.z;
         }
-        velPosObs[3] = gpsDataDelayed.pos.x;
-        velPosObs[4] = gpsDataDelayed.pos.y;
     } else if (extNavDataToFuse && (PV_AidingMode == AID_ABSOLUTE) && (frontend->_sources.getPosXYSource() == AP_NavEKF_Source::SourceXY::EXTNAV)) {
         // use external nav system for position
         extNavUsedForPos = true;
