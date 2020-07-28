@@ -1522,7 +1522,9 @@ void emit_userdata_method(const struct userdata *data, const struct method *meth
           arg = arg->next;
         }
         fprintf(source, "    } else {\n");
-        fprintf(source, "        lua_pushnil(L);\n");
+        for (int i = 0; i < return_count; i++) {
+          fprintf(source, "        lua_pushnil(L);\n");
+        }
         fprintf(source, "    }\n");
       } else {
         fprintf(source, "    lua_pushboolean(L, data);\n");
