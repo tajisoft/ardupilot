@@ -1335,10 +1335,9 @@ bool NavEKF3::setOriginLLH(const Location &loc)
     if (!core) {
         return false;
     }
-    if (_sources.getPosXYSource() != AP_NavEKF_Source::SourceXY::EXTNAV) {
-        // we don't allow setting of the EKF origin unless we are
-        // flying in non-GPS mode. This is to prevent accidental set
-        // of EKF origin with invalid position or height
+    if (_sources.getPosXYSource() == AP_NavEKF_Source::SourceXY::GPS) {
+        // we don't allow setting of the EKF origin if using GPS to prevent
+        // accidental setting of EKF origin with invalid position or height
         gcs().send_text(MAV_SEVERITY_WARNING, "EKF3 refusing set origin");
         return false;
     }
