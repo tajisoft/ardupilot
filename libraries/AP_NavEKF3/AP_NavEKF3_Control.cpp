@@ -212,7 +212,7 @@ void NavEKF3_core::setAidingMode()
             // GPS aiding is the preferred option unless excluded by the user
             if (readyToUseGPS() || readyToUseRangeBeacon() || readyToUseExtNav()) {
                 PV_AidingMode = AID_ABSOLUTE;
-            } else if ((readyToUseOptFlow()  && (frontend->_flowUse == FLOW_USE_NAV)) || readyToUseBodyOdm()) {
+            } else if (readyToUseOptFlow() || readyToUseBodyOdm()) {
                 PV_AidingMode = AID_RELATIVE;
             }
             break;
@@ -437,6 +437,15 @@ bool NavEKF3_core::useRngFinder(void) const
 // return true if the filter is ready to start using optical flow measurements
 bool NavEKF3_core::readyToUseOptFlow(void) const
 {
+    // ensure flow is used for navigation and not terrain alt estimation
+    if (frontend->_flowUse != FLOW_USE_NAV) {
+        return false;
+    }
+
+    if (frontend->_sources.getVelXYSource() != AP_NavEKF_Source::SourceXY::OPTFLOW) {
+        return false;
+    }
+
     // We need stable roll/pitch angles and gyro bias estimates but do not need the yaw angle aligned to use optical flow
     return (imuSampleTime_ms - flowMeaTime_ms < 200) && tiltAlignComplete && delAngBiasLearned;
 }
