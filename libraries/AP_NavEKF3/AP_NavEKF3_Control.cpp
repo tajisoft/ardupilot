@@ -236,20 +236,28 @@ void NavEKF3_core::setAidingMode()
             uint16_t minTestTime_ms = MIN(frontend->tiltDriftTimeMax_ms, MIN(frontend->posRetryTimeNoVel_ms,frontend->posRetryTimeUseVel_ms));
 
             // Check if optical flow data is being used
-            bool optFlowUsed = (imuSampleTime_ms - prevFlowFuseTime_ms <= minTestTime_ms);
+            bool optFlowUsed = (imuSampleTime_ms - prevFlowFuseTime_ms <= minTestTime_ms) &&
+                               (frontend->_sources.getVelXYSource() == AP_NavEKF_Source::SourceXY::OPTFLOW);
 
             // Check if body odometry data is being used
-            bool bodyOdmUsed = (imuSampleTime_ms - prevBodyVelFuseTime_ms <= minTestTime_ms);
+            bool bodyOdmUsed = (imuSampleTime_ms - prevBodyVelFuseTime_ms <= minTestTime_ms) &&
+                               (frontend->_sources.getVelXYSource() == AP_NavEKF_Source::SourceXY::EXTNAV);
 
             // Check if airspeed data is being used
             bool airSpdUsed = (imuSampleTime_ms - lastTasPassTime_ms <= minTestTime_ms);
 
             // Check if range beacon data is being used
-            bool rngBcnUsed = (imuSampleTime_ms - lastRngBcnPassTime_ms <= minTestTime_ms);
+            bool rngBcnUsed = (imuSampleTime_ms - lastRngBcnPassTime_ms <= minTestTime_ms) &&
+                              (frontend->_sources.getPosXYSource() == AP_NavEKF_Source::SourceXY::BEACON);
 
             // Check if GPS or external nav is being used
-            bool posUsed = (imuSampleTime_ms - lastPosPassTime_ms <= minTestTime_ms);
-            bool gpsVelUsed = (imuSampleTime_ms - lastVelPassTime_ms <= minTestTime_ms);
+            bool posUsed = (imuSampleTime_ms - lastPosPassTime_ms <= minTestTime_ms) &&
+                           ((frontend->_sources.getPosXYSource() == AP_NavEKF_Source::SourceXY::GPS) ||
+                            (frontend->_sources.getPosXYSource() == AP_NavEKF_Source::SourceXY::EXTNAV));
+
+            // Check if GPS velocity is being used
+            bool gpsVelUsed = (imuSampleTime_ms - lastVelPassTime_ms <= minTestTime_ms) &&
+                              (frontend->_sources.getVelXYSource() == AP_NavEKF_Source::SourceXY::GPS);
 
             // Check if attitude drift has been constrained by a measurement source
             bool attAiding = posUsed || gpsVelUsed || optFlowUsed || airSpdUsed || rngBcnUsed || bodyOdmUsed;
