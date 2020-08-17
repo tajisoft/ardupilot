@@ -12,7 +12,7 @@ void NavEKF3_core::SelectRngBcnFusion()
     readRngBcnData();
 
     // Determine if we need to fuse range beacon data on this time step
-    if (rngBcnDataToFuse) {
+    if (rngBcnDataToFuse && (frontend->_sources.getPosXYSource() == AP_NavEKF_Source::SourceXY::BEACON)) {
         if (PV_AidingMode == AID_ABSOLUTE) {
             if (!filterStatus.flags.using_gps && rngBcnAlignmentCompleted) {
                 if (!bcnOriginEstInit) {
