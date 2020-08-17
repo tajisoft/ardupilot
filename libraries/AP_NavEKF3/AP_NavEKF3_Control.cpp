@@ -453,6 +453,11 @@ bool NavEKF3_core::readyToUseOptFlow(void) const
 // return true if the filter is ready to start using body frame odometry measurements
 bool NavEKF3_core::readyToUseBodyOdm(void) const
 {
+    if ((frontend->_sources.getVelXYSource() != AP_NavEKF_Source::SourceXY::EXTNAV) &&
+        (frontend->_sources.getVelXYSource() != AP_NavEKF_Source::SourceXY::WHEEL_ENCODER)) {
+        return false;
+    }
+
     // Check for fresh visual odometry data that meets the accuracy required for alignment
     bool visoDataGood = (imuSampleTime_ms - bodyOdmMeasTime_ms < 200) && (bodyOdmDataNew.velErr < 1.0f);
 
@@ -479,12 +484,20 @@ bool NavEKF3_core::readyToUseGPS(void) const
 // return true if the filter to be ready to use the beacon range measurements
 bool NavEKF3_core::readyToUseRangeBeacon(void) const
 {
+    if (frontend->_sources.getPosXYSource() != AP_NavEKF_Source::SourceXY::BEACON) {
+        return false;
+    }
+
     return tiltAlignComplete && yawAlignComplete && delAngBiasLearned && rngBcnAlignmentCompleted && rngBcnDataToFuse;
 }
 
 // return true if the filter is ready to use external nav data
 bool NavEKF3_core::readyToUseExtNav(void) const
 {
+    if (frontend->_sources.getPosXYSource() != AP_NavEKF_Source::SourceXY::EXTNAV) {
+        return false;
+    }
+
     return tiltAlignComplete && extNavDataToFuse;
 }
 
