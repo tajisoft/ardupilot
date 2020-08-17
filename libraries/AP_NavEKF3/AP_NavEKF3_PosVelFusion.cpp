@@ -1807,8 +1807,9 @@ void NavEKF3_core::SelectBodyOdomFusion()
         bodyVelFusionDelayed = false;
     }
 
-    // Check for data at the fusion time horizon
-    if (storedBodyOdm.recall(bodyOdmDataDelayed, imuDataDelayed.time_ms)) {
+    // Check for body odometry data (aka visual position delta) at the fusion time horizon
+    const bool bodyOdomDataToFuse = storedBodyOdm.recall(bodyOdmDataDelayed, imuDataDelayed.time_ms);
+    if (bodyOdomDataToFuse && (frontend->_sources.getVelXYSource() == AP_NavEKF_Source::SourceXY::EXTNAV)) {
 
         // start performance timer
         hal.util->perf_begin(_perf_FuseBodyOdom);
@@ -1818,8 +1819,11 @@ void NavEKF3_core::SelectBodyOdomFusion()
 
         // stop the performance timer
         hal.util->perf_end(_perf_FuseBodyOdom);
+    }
 
-    } else if (storedWheelOdm.recall(wheelOdmDataDelayed, imuDataDelayed.time_ms)) {
+    // Check for wheel encoder data at the fusion time horizon
+    const bool wheelOdomDataToFuse = storedWheelOdm.recall(wheelOdmDataDelayed, imuDataDelayed.time_ms);
+    if (wheelOdomDataToFuse && (frontend->_sources.getVelXYSource() == AP_NavEKF_Source::SourceXY::WHEEL_ENCODER)) {
 
         // check if the delta time is too small to calculate a velocity
         if (wheelOdmDataDelayed.delTime > EKF_TARGET_DT) {
@@ -1845,9 +1849,7 @@ void NavEKF3_core::SelectBodyOdomFusion()
 
             // Fuse data into the main filter
             FuseBodyVel();
-
         }
-
     }
 }
 
