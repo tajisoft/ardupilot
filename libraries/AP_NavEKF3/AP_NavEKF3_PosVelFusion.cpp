@@ -412,7 +412,7 @@ void NavEKF3_core::SelectVelPosFusion()
     // detect position source changes
     AP_NavEKF_Source::SourceXY pos_source = frontend->_sources.getPosXYSource();
     if (pos_source != pos_source_last) {
-        pos_source_reset = true;
+        pos_source_reset = (pos_source != AP_NavEKF_Source::SourceXY::NONE);
         pos_source_last = pos_source;
     }
 
