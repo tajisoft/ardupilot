@@ -317,11 +317,9 @@ void NavEKF3_core::setAidingMode()
             } else if (!posAiding && (readyToUseOptFlow() || readyToUseBodyOdm())) {
                 // takeover in relative aiding if possible
                 PV_AidingMode = AID_RELATIVE;
-                posTimeout = true;
-                velTimeout = true;
-                rngBcnTimeout = true;
-                tasTimeout = true;
-                gpsNotAvailable = true;
+                // store the current position to be used to keep reporting the last known position
+                lastKnownPositionNE.x = stateStruct.position.x;
+                lastKnownPositionNE.y = stateStruct.position.y;
                 break;
             }
             break;
@@ -352,6 +350,10 @@ void NavEKF3_core::setAidingMode()
             // reset relative aiding sensor fusion activity status
             flowFusionActive = false;
             bodyVelFusionActive = false;
+
+            // reset position and velocity
+            ResetVelocity(velResetSource);
+            ResetPosition(posResetSource);
             break;
 
         case AID_RELATIVE:
@@ -405,12 +407,12 @@ void NavEKF3_core::setAidingMode()
             lastPosPassTime_ms = imuSampleTime_ms;
             lastVelPassTime_ms = imuSampleTime_ms;
             lastRngBcnPassTime_ms = imuSampleTime_ms;
+
+            // reset position and velocity
+            ResetVelocity(velResetSource);
+            ResetPosition(posResetSource);
             break;
         }
-
-        // Always reset the position and velocity when changing mode
-        ResetVelocity(velResetSource);
-        ResetPosition(posResetSource);
     }
 
 }
