@@ -926,7 +926,10 @@ void NavEKF3::UpdateFilter(void)
         // performance
         primary = 0;
     }
-    
+
+    // align position of inactive sources to ahrs
+    _sources.align_inactive_sources();
+
     check_log_write();
 }
 
