@@ -15,6 +15,7 @@
 
 #include <AP_HAL/AP_HAL.h>
 #include <AP_Math/AP_Math.h>
+#include <AP_VisualOdom/AP_VisualOdom.h>
 #include "AP_NavEKF_Source.h"
 
 extern const AP_HAL::HAL& hal;
@@ -129,6 +130,30 @@ void AP_NavEKF_Source::setPosVelXYZSource(uint8_t source_idx)
     _active_source.yaw = (source_idx == 1 ? (SourceYaw)_source[1].yaw.get() : (SourceYaw)_source[0].yaw.get());
 }
 
+// align position of inactive sources to ahrs
+void AP_NavEKF_Source::align_inactive_sources()
+{
+    // align visual odometry to GPS
+#if HAL_VISUALODOM_ENABLED
+    const bool posxy_could_use_extnav = (getPosXYSourceByIndex(0) == SourceXY::EXTNAV) || (getPosXYSourceByIndex(1) == SourceXY::EXTNAV);
+    const bool align_posxy = posxy_could_use_extnav && ((getPosXYSource() == SourceXY::GPS) || (getPosXYSource() == SourceXY::BEACON));
+
+    const bool posz_could_use_extnav = (getPosZSourceByIndex(0) == SourceZ::EXTNAV) || (getPosZSourceByIndex(1) == SourceZ::EXTNAV);
+    const bool align_posz = posz_could_use_extnav &&
+                            ((getPosZSource() == SourceZ::BARO) || (getPosZSource() == SourceZ::RANGEFINDER) ||
+                             (getPosZSource() == SourceZ::GPS) || (getPosZSource() == SourceZ::BEACON));
+
+    if (align_posxy || align_posz) {
+        AP_VisualOdom *visual_odom = AP::visualodom();
+        if ((visual_odom != nullptr) && visual_odom->enabled()) {
+            if (align_posxy || align_posz) {
+                visual_odom->align_position_to_ahrs(align_posxy, align_posz);
+            }
+        }
+    }
+#endif
+}
+
 // sensor specific helper functions
 bool AP_NavEKF_Source::usingGPS() const
 {
@@ -234,3 +259,45 @@ bool AP_NavEKF_Source::pre_arm_check(char *failure_msg, uint8_t failure_msg_len)
 
     return true;
 }
+
+// get source by id
+AP_NavEKF_Source::SourceXY AP_NavEKF_Source::getPosXYSourceByIndex(uint8_t idx) const
+{
+    if (idx >= AP_NAKEKF_SOURCE_COUNT) {
+        return SourceXY::NONE;
+    }
+    return (SourceXY)_source[idx].posxy.get();
+}
+
+AP_NavEKF_Source::SourceZ AP_NavEKF_Source::getPosZSourceByIndex(uint8_t idx) const
+{
+    if (idx >= AP_NAKEKF_SOURCE_COUNT) {
+        return SourceZ::NONE;
+    }
+    return (SourceZ)_source[idx].posz.get();
+}
+
+AP_NavEKF_Source::SourceXY AP_NavEKF_Source::getVelXYSourceByIndex(uint8_t idx) const
+{
+    if (idx >= AP_NAKEKF_SOURCE_COUNT) {
+        return SourceXY::NONE;
+    }
+    return (SourceXY)_source[idx].velxy.get();
+}
+
+AP_NavEKF_Source::SourceZ AP_NavEKF_Source::getVelZSourceByIndex(uint8_t idx) const
+{
+    if (idx >= AP_NAKEKF_SOURCE_COUNT) {
+        return SourceZ::NONE;
+    }
+    return (SourceZ)_source[idx].velz.get();
+}
+
+AP_NavEKF_Source::SourceYaw AP_NavEKF_Source::getYawSourceByIndex(uint8_t idx) const
+{
+    if (idx >= AP_NAKEKF_SOURCE_COUNT) {
+        return SourceYaw::NONE;
+    }
+    return (SourceYaw)_source[idx].yaw.get();
+}
+

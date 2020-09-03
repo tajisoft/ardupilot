@@ -46,7 +46,7 @@ public:
     // initialisation
     void init();
 
-    // get/set current position source
+    // get current position source
     SourceXY getPosXYSource() const { return _active_source.initialised ? _active_source.posxy : (SourceXY)_source[0].posxy.get(); }
     SourceZ getPosZSource() const { return _active_source.initialised ? _active_source.posz : (SourceZ)_source[0].posz.get() ; }
 
@@ -60,6 +60,9 @@ public:
 
     // get yaw source
     SourceYaw getYawSource() const { return _active_source.initialised ? _active_source.yaw : (SourceYaw)_source[0].yaw.get(); }
+
+    // align position of inactive sources to ahrs
+    void align_inactive_sources();
 
     // sensor specific helper functions
 
@@ -75,6 +78,13 @@ public:
     static const struct AP_Param::GroupInfo var_info[];
 
 private:
+
+    // get source by index (0 or 1)
+    SourceXY getPosXYSourceByIndex(uint8_t idx) const;
+    SourceZ getPosZSourceByIndex(uint8_t idx) const;
+    SourceXY getVelXYSourceByIndex(uint8_t idx) const;
+    SourceZ getVelZSourceByIndex(uint8_t idx) const;
+    SourceYaw getYawSourceByIndex(uint8_t idx) const;
 
     // Parameters
     struct {
