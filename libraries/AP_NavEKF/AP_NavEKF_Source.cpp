@@ -15,6 +15,12 @@
 
 #include <AP_HAL/AP_HAL.h>
 #include <AP_Math/AP_Math.h>
+#include <AP_Baro/AP_Baro.h>
+#include <AP_Beacon/AP_Beacon.h>
+#include <AP_Compass/AP_Compass.h>
+#include <AP_GPS/AP_GPS.h>
+#include <AP_OpticalFlow/AP_OpticalFlow.h>
+#include <AP_RangeFinder/AP_RangeFinder.h>
 #include <AP_VisualOdom/AP_VisualOdom.h>
 #include "AP_NavEKF_Source.h"
 
@@ -176,16 +182,29 @@ bool AP_NavEKF_Source::params_configured_in_storage() const
 // returns false if we fail arming checks, in which case the buffer will be populated with a failure message
 bool AP_NavEKF_Source::pre_arm_check(char *failure_msg, uint8_t failure_msg_len) const
 {
+    bool baro_required = false;
+    bool beacon_required = false;
+    bool compass_required = false;
+    bool gps_required = false;
+    bool rangefinder_required = false;
+    bool visualodom_required = false;
+    bool optflow_required = false;
+
     // check source params are valid
     for (uint8_t i=0; i<AP_NAKEKF_SOURCE_COUNT; i++) {
 
         // check posxy
         switch (_source[i].posxy) {
         case (int8_t)SourceXY::NONE:
+            break;
         case (int8_t)SourceXY::GPS:
+            gps_required = true;
+            break;
         case (int8_t)SourceXY::BEACON:
+            beacon_required = true;
+            break;
         case (int8_t)SourceXY::EXTNAV:
-            // valid posxy value
+            visualodom_required = true;
             break;
         case (int8_t)SourceXY::OPTFLOW:
         case (int8_t)SourceXY::WHEEL_ENCODER:
@@ -198,11 +217,18 @@ bool AP_NavEKF_Source::pre_arm_check(char *failure_msg, uint8_t failure_msg_len)
         // check velxy
         switch (_source[i].velxy) {
         case (int8_t)SourceXY::NONE:
+            break;
         case (int8_t)SourceXY::GPS:
+            gps_required = true;
+            break;
         case (int8_t)SourceXY::OPTFLOW:
+            optflow_required = true;
+            break;
         case (int8_t)SourceXY::EXTNAV:
+            visualodom_required = true;
+            break;
         case (int8_t)SourceXY::WHEEL_ENCODER:
-            // valid velxy value
+            // ToDo: add wheelencoder_required and test below
             break;
         case (int8_t)SourceXY::BEACON:
         default:
@@ -211,15 +237,30 @@ bool AP_NavEKF_Source::pre_arm_check(char *failure_msg, uint8_t failure_msg_len)
             return false;
         }
 
+        // either posxy or velxy must be defined
+        if ((_source[i].posxy == (int8_t)SourceXY::NONE) && (_source[i].velxy == (int8_t)SourceXY::NONE)) {
+            hal.util->snprintf(failure_msg, failure_msg_len, "EK3_SRC_POSXY%s or _VELXY%s must be non-zero", (i == 0) ? "" : "2", (i == 0) ? "" : "2");
+            return false;
+        }
+
         // check posz
         switch (_source[i].posz) {
-        case (int8_t)SourceZ::NONE:
         case (int8_t)SourceZ::BARO:
-        case (int8_t)SourceZ::RANGEFINDER:
-        case (int8_t)SourceZ::GPS:
-        case (int8_t)SourceZ::BEACON:
-        case (int8_t)SourceZ::EXTNAV:
+            baro_required = true;
             break;
+        case (int8_t)SourceZ::RANGEFINDER:
+            rangefinder_required = true;
+            break;
+        case (int8_t)SourceZ::GPS:
+            gps_required = true;
+            break;
+        case (int8_t)SourceZ::BEACON:
+            beacon_required = true;
+            break;
+        case (int8_t)SourceZ::EXTNAV:
+            visualodom_required = true;
+            break;
+        case (int8_t)SourceZ::NONE:
         default:
             // invalid posz value
             hal.util->snprintf(failure_msg, failure_msg_len, "Check EK3_SRC_POSZ%s", (i == 0) ? "" : "2");
@@ -229,9 +270,12 @@ bool AP_NavEKF_Source::pre_arm_check(char *failure_msg, uint8_t failure_msg_len)
         // check velz
         switch (_source[i].velz) {
         case (int8_t)SourceZ::NONE:
+            break;
         case (int8_t)SourceZ::GPS:
+            gps_required = true;
+            break;
         case (int8_t)SourceZ::EXTNAV:
-            // valid velz value
+            visualodom_required = true;
             break;
         case (int8_t)SourceZ::BARO:
         case (int8_t)SourceZ::RANGEFINDER:
@@ -253,6 +297,49 @@ bool AP_NavEKF_Source::pre_arm_check(char *failure_msg, uint8_t failure_msg_len)
         default:
             // invalid posz value
             hal.util->snprintf(failure_msg, failure_msg_len, "Check EK3_SRC_YAW%s", (i == 0) ? "" : "2");
+            return false;
+        }
+    }
+
+    // check all required sensor are available
+    const char* ekf_requires_msg = "EK3_SRC requires %s";
+    if (baro_required && (AP::baro().num_instances() == 0)) {
+        hal.util->snprintf(failure_msg, failure_msg_len, ekf_requires_msg, "Baro");
+        return false;
+    }
+
+    if (beacon_required && (AP::beacon() == nullptr || !AP::beacon()->enabled())) {
+        hal.util->snprintf(failure_msg, failure_msg_len, ekf_requires_msg, "Beacon");
+        return false;
+    }
+
+    if (compass_required && AP::compass().get_num_enabled() == 0) {
+        hal.util->snprintf(failure_msg, failure_msg_len, ekf_requires_msg, "Compass");
+        return false;
+    }
+
+    if (gps_required && (AP::gps().num_sensors() == 0)) {
+        hal.util->snprintf(failure_msg, failure_msg_len, ekf_requires_msg, "GPS");
+        return false;
+    }
+
+    if (optflow_required && (AP::opticalflow() == nullptr || !AP::opticalflow()->enabled())) {
+        hal.util->snprintf(failure_msg, failure_msg_len, ekf_requires_msg, "OpticalFlow");
+        return false;
+    }
+
+    if (rangefinder_required && (AP::rangefinder() == nullptr || AP::rangefinder()->num_sensors() == 0)) {
+        hal.util->snprintf(failure_msg, failure_msg_len, ekf_requires_msg, "RangeFinder");
+        return false;
+    }
+
+    if (visualodom_required) {
+        bool visualodom_available = false;
+#if HAL_VISUALODOM_ENABLED
+        visualodom_available = (AP::visualodom() != nullptr) && AP::visualodom()->enabled();
+#endif
+        if (!visualodom_available) {
+            hal.util->snprintf(failure_msg, failure_msg_len, ekf_requires_msg, "VisualOdom");
             return false;
         }
     }
