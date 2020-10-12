@@ -376,6 +376,19 @@ void NavEKF3_core::CorrectExtNavVelForSensorOffset(Vector3f &ext_velocity) const
 #endif
 }
 
+// calculate velocity variance helper function
+void NavEKF3_core::CalculateVelInnovationsAndVariances(const Vector3f &velocity, float noise, float accel_scale, Vector3f &innovations, Vector3f &variances) const
+{
+    // innovations are latest estimate - latest observation
+    innovations = stateStruct.velocity - velocity;
+
+    const float obs_data_chk = sq(constrain_float(noise, 0.05f, 5.0f)) + sq(accel_scale * accNavMag);
+
+    // calculate innovation variance.  velocity states start at index 4
+    variances.x = P[4][4] + obs_data_chk;
+    variances.y = P[5][5] + obs_data_chk;
+    variances.z = P[6][6] + obs_data_chk;
+}
 
 /********************************************************
 *                   FUSE MEASURED_DATA                  *
@@ -855,7 +868,7 @@ void NavEKF3_core::FuseVelPosNED()
                     Kfusion[i] = P[i][stateIndex]*SK;
                 }
 
-                // inhibit delta angle bias state estmation by setting Kalman gains to zero
+                // inhibit delta angle bias state estimation by setting Kalman gains to zero
                 if (!inhibitDelAngBiasStates) {
                     for (uint8_t i = 10; i<=12; i++) {
                         Kfusion[i] = P[i][stateIndex]*SK;
@@ -897,8 +910,7 @@ void NavEKF3_core::FuseVelPosNED()
                 // update the covariance - take advantage of direct observation of a single state at index = stateIndex to reduce computations
                 // this is a numerically optimised implementation of standard equation P = (I - K*H)*P;
                 for (uint8_t i= 0; i<=stateIndexLim; i++) {
-                    for (uint8_t j= 0; j<=stateIndexLim; j++)
-                    {
+                    for (uint8_t j= 0; j<=stateIndexLim; j++) {
                         KHP[i][j] = Kfusion[i] * P[stateIndex][j];
                     }
                 }
