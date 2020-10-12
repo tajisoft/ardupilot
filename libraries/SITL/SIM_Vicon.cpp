@@ -105,9 +105,23 @@ void Vicon::update_vicon_position_estimate(const Location &loc,
         return;
     }
 
-    // failure simulation
-    if (_sitl->vicon_fail.get() != 0) {
+    // failure simulation if SIM_VICON_FAIL is 1
+    if (_sitl->vicon_fail.get() == 1) {
         return;
+    }
+
+    // run glitch routine if SIM_VICON_FAIL is 2
+    Vector3f pos_glitch, vel_glitch;
+    if (_sitl->vicon_fail.get() == 2) {
+        if (glitch_routine_index < MIN(ARRAY_SIZE(glitch_routine_pos), ARRAY_SIZE(glitch_routine_pos))) {
+            pos_glitch = glitch_routine_pos[glitch_routine_index];
+            vel_glitch = glitch_routine_vel[glitch_routine_index];
+            glitch_routine_index++;
+        } else {
+            _sitl->vicon_fail.set_and_save(0);
+        }
+    } else {
+        glitch_routine_index = 0;
     }
 
     float roll;
@@ -121,8 +135,8 @@ void Vicon::update_vicon_position_estimate(const Location &loc,
     rot.from_euler(radians(_sitl->state.rollDeg), radians(_sitl->state.pitchDeg), radians(_sitl->state.yawDeg));
     Vector3f pos_offset_ef = rot * pos_offset;
 
-    // add earth frame sensor offset and glitch to position
-    Vector3f pos_corrected = position + pos_offset_ef + _sitl->vicon_glitch.get();
+    // add earth frame sensor offset, glitch and glitch_routine to position
+    Vector3f pos_corrected = position + pos_offset_ef + _sitl->vicon_glitch.get() + pos_glitch;
 
     // calculate a velocity offset due to the antenna position offset and body rotation rate
     // note: % operator is overloaded for cross product
@@ -133,7 +147,7 @@ void Vicon::update_vicon_position_estimate(const Location &loc,
 
     // rotate the velocity offset into earth frame and add to the c.g. velocity
     Vector3f vel_rel_offset_ef = rot * vel_rel_offset_bf;
-    Vector3f vel_corrected = velocity + vel_rel_offset_ef + _sitl->vicon_vel_glitch.get();
+    Vector3f vel_corrected = velocity + vel_rel_offset_ef + _sitl->vicon_vel_glitch.get() + vel_glitch;
 
     // adjust yaw, position and velocity to account for vicon's yaw
     const int16_t vicon_yaw_deg = _sitl->vicon_yaw.get();
