@@ -424,6 +424,11 @@ void NavEKF3_core::SelectVelPosFusion()
 
     // get data that has now fallen behind the fusion time horizon
     gpsDataToFuse = storedGPS.recall(gpsDataDelayed,imuDataDelayed.time_ms);
+    if (gpsDataToFuse) {
+        CorrectGPSForAntennaOffset(gpsDataDelayed);
+        // calculate innovations and variances for reporting purposes only
+        CalculateVelInnovationsAndVariances(gpsDataDelayed.vel, frontend->_gpsHorizVelNoise, frontend->gpsNEVelVarAccScale, gpsVelInnov, gpsVelVarInnov);
+    }
 
     // detect position source changes
     AP_NavEKF_Source::SourceXY pos_source = frontend->_sources.getPosXYSource();
@@ -442,7 +447,6 @@ void NavEKF3_core::SelectVelPosFusion()
         fusePosData = true;
         extNavUsedForPos = false;
 
-        CorrectGPSForAntennaOffset(gpsDataDelayed);
         velPosObs[3] = gpsDataDelayed.pos.x;
         velPosObs[4] = gpsDataDelayed.pos.y;
 
