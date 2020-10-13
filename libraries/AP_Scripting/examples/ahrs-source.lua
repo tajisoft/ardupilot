@@ -22,6 +22,7 @@ local rangefinder_rotation2 = 25    -- check using forward (0) or downward (25) 
 local source_counter = 0            -- number of iterations (of 0.1 sec) we have been above or below threshold
 local source_counter_max = 20       -- when counter reaches this number (i.e. 2sec) source may be switched
 local source_prev = 0               -- previous source, defaults to primary source
+local sw_pos_prev = -1              -- previous switch position
 
 -- the main update function that uses the takeoff and velocity controllers to fly a rough square pattern
 function update()
@@ -114,6 +115,8 @@ function update()
       if (source_prev ~= 0) then
         source_prev = 0
         gcs:send_text(0, "Pilot switched to Primary source")
+      elseif (sw_pos ~= sw_pos_prev) then
+        gcs:send_text(0, "Pilot switched but already Primary source")
       end
     elseif (sw_pos == 1) then
       -- pilot has selected auto section of source
@@ -122,12 +125,17 @@ function update()
         ahrs:set_position_source(0)
         source_prev = 0
         gcs:send_text(0, "AHRS switched to Primary source")
-      end
-      if (source_prev == 0) and (source_counter == source_counter_max) then
+      elseif (source_prev == 0) and (source_counter == source_counter_max) then
         -- switch to secondary source
         ahrs:set_position_source(1)
         source_prev = 1
         gcs:send_text(0, "AHRS switched to Secondary source")
+      elseif (sw_pos ~= sw_pos_prev) then
+        if (source_prev == 0) then
+          gcs:send_text(0, "Auto source but already Primary")
+        else
+          gcs:send_text(0, "Auto source but already Secondary")
+        end
       end
       --gcs:send_text(0, "Src:" .. tostring(source_prev) .. "Cnt:" .. tostring(source_counter))
     else
@@ -135,8 +143,11 @@ function update()
       if (source_prev ~= 1) then
         source_prev = 1
         gcs:send_text(0, "Pilot switched to Secondary source")
+      elseif (sw_pos ~= sw_pos_prev) then
+        gcs:send_text(0, "Pilot switched but already Secondary source")
       end
     end
+    sw_pos_prev = sw_pos
   end
 
   return update, 100
