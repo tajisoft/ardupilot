@@ -289,12 +289,6 @@ bool AP_NavEKF_Source::pre_arm_check(char *failure_msg, uint8_t failure_msg_len)
             return false;
         }
 
-        // either posxy or velxy must be defined
-        if ((_source[i].posxy == (int8_t)SourceXY::NONE) && (_source[i].velxy == (int8_t)SourceXY::NONE)) {
-            hal.util->snprintf(failure_msg, failure_msg_len, "EK3_SRC_POSXY%s or _VELXY%s must be non-zero", idx_str[i], idx_str[i]);
-            return false;
-        }
-
         // check posz
         switch (_source[i].posz) {
         case (int8_t)SourceZ::BARO:
