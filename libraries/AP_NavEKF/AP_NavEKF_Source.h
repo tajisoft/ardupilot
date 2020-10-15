@@ -2,7 +2,7 @@
 
 #include <AP_Param/AP_Param.h>
 
-#define AP_NAKEKF_SOURCE_COUNT 2    // two banks of sources
+#define AP_NAKEKF_SOURCE_COUNT 3    // three banks of sources
 
 class AP_NavEKF_Source
 {
@@ -50,7 +50,7 @@ public:
     SourceXY getPosXYSource() const { return _active_source.initialised ? _active_source.posxy : (SourceXY)_source[0].posxy.get(); }
     SourceZ getPosZSource() const { return _active_source.initialised ? _active_source.posz : (SourceZ)_source[0].posz.get() ; }
 
-    // set position and velocity sources to either 0=primary or 1=secondary
+    // set position and velocity sources to either 0=primary, 1=secondary, 2=tertiary
     void setPosVelXYZSource(uint8_t source_idx);
 
     // get/set velocity source
@@ -79,7 +79,7 @@ public:
 
 private:
 
-    // get source by index (0 or 1)
+    // get source by index (0, 1 or 2)
     SourceXY getPosXYSourceByIndex(uint8_t idx) const;
     SourceZ getPosZSourceByIndex(uint8_t idx) const;
     SourceXY getVelXYSourceByIndex(uint8_t idx) const;
