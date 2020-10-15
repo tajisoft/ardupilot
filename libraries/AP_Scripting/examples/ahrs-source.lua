@@ -1,8 +1,9 @@
 -- switches between AHRS/EKF sources if the rangefinder distance is less than 10m and the pilot's source selection switch is in the middle
 -- this script is intended to help vehicles from between GPS and Non-GPS environments
 --
--- setup RCx_OPTION = 89 (EKF Pos Source), move to middle position to enable automatic source selection
--- setup EK3_SRC_ parameters so that GPS is the primary source, Non-GPS (i.e. T265) is the secondary source
+-- setup RCx_OPTION = 89 (EKF Pos Source) to select the source (low=primary, middle=secondary, high=tertiary)
+-- setup RCx_OPTION = 83 (ZigZag Auto).  When this switch is pulled high, the source will be automatically selected
+-- setup EK3_SRC_ parameters so that GPS is the primary source, Non-GPS (i.e. T265) is secondary and optical flow tertiary
 -- configure a forward or downward facing lidar with a range of more than 5m
 --
 -- When the auxiliary switch is in middle position, automatic source selection uses these thresholds:
@@ -17,137 +18,157 @@
 --    GPS will be used when RangeFinder returns distance of >=8m for at least 3 seconds
 --    NonGPS will be used when RangeFinder returns distance of <8m for at least 3 seconds
 
-local rangefinder_rotation1 = 0     -- check using forward (0) or downward (25) facing lidar
-local rangefinder_rotation2 = 25    -- check using forward (0) or downward (25) facing lidar
-local source_counter = 0            -- number of iterations (of 0.1 sec) we have been above or below threshold
-local source_counter_max = 20       -- when counter reaches this number (i.e. 2sec) source may be switched
+local rangefinder_rotation = 25     -- check downward (25) facing lidar
 local source_prev = 0               -- previous source, defaults to primary source
-local sw_pos_prev = -1              -- previous switch position
+local sw_source_prev = -1           -- previous source switch position
+local sw_auto_pos_prev = -1         -- previous auto source switch position
+local auto_switch = false           -- true when auto switching between sources is active
+local gps_usable_accuracy = 1.0     -- GPS is usable if speed accuracy is at or below this value
+local vote_counter_max = 20         -- when a vote counter reaches this number (i.e. 2sec) source may be switched
+local gps_vs_nongps_vote = 0        -- vote counter for GPS vs NonGPS (-20 = GPS, +20 = NonGPS)
+local extnav_vs_opticalflow_vote = 0 -- vote counter for extnav vs optical flow (-20 = extnav, +20 = opticalflow)
+
+local debug_counter = 0
 
 -- the main update function that uses the takeoff and velocity controllers to fly a rough square pattern
 function update()
 
-  -- check rangefinder distance
-  local rangefinder_thresh_dist = param:get('SCR_USER1')  -- SCR_USER1 holds rangefinder threshold
-  if rangefinder_thresh_dist and (rangefinder_thresh_dist > 0) then
-    -- decide which rangefinder to use
-    local rotation_used = rangefinder_rotation1;
-    if not rangefinder:has_orientation(rangefinder_rotation1) then
-      rotation_used = rangefinder_rotation2
-    end
-
-    -- check rangefinder distance
-    if rangefinder:has_data_orient(rotation_used) then
-      local distance_m = rangefinder:distance_cm_orient(rotation_used) * 0.01
-      if (distance_m < rangefinder_thresh_dist) then
-        -- rangefinder is below threshold, increase source_counter
-        source_counter = math.max(source_counter, 0)
-        source_counter = source_counter + 1
-        source_counter = math.min(source_counter, source_counter_max)
-        --gcs:send_text(0, "RngFnd low (" .. tostring(distance_m) .. "<" .. tostring(rangefinder_thresh_dist))
-      else
-        -- rangefinder is above threshold, reduce source_counter
-        source_counter = math.min(source_counter, 0)
-        source_counter = source_counter - 1
-        source_counter = math.max(source_counter, -source_counter_max)
-        --gcs:send_text(0, "RngFnd high (" .. tostring(distance_m) .. ">" .. tostring(rangefinder_thresh_dist))
-      end
-    end
+  -- check switches are configured
+  -- source selection from RCx_FUNCTION = 89 (EKF Source Select)
+  -- auto source from RCx_FUNCTION = 83 (ZigZag_Auto)
+  local rc_function_source = rc:find_channel_for_option(89)
+  local rc_function_auto = rc:find_channel_for_option(83)
+  if (rc_function_source == nil) or (rc_function_auto == nil) then
+    gcs:send_text(0, "ahrs-source.lua: RCx_FUNCTION=89 or 83 not set!")
+    return update, 1000
   end
 
-  -- get innovations from external nav
+  -- check rangefinder distance threshold has been set
+  local rangefinder_thresh_dist = param:get('SCR_USER1')  -- SCR_USER1 holds rangefinder threshold
+  if (rangefinder_thresh_dist == nil) or (rangefinder_thresh_dist <= 0) then
+    gcs:send_text(0, "ahrs-source.lua: set SCR_USER1 to rangefinder threshold")
+    return update, 1000
+  end
+
+  -- check GPS speed accuracy threshold has been set
+  local gps_speedaccuracy_thresh = param:get('SCR_USER2')  -- SCR_USER2 holds GPS speed accuracy threshold
+  if (gps_speedaccuracy_thresh == nil) or (gps_speedaccuracy_thresh <= 0) then
+    gcs:send_text(0, "ahrs-source.lua: set SCR_USER2 to GPS speed accuracy threshold")
+    return update, 1000
+  end
+
+  -- check external nav innovation threshold has been set
+  local extnav_innov_thresh = param:get('SCR_USER3')  -- SCR_USER3 holds Non-GPS vertical velocity innovation
+  if (extnav_innov_thresh == nil) or (extnav_innov_thresh <= 0) then
+    gcs:send_text(0, "ahrs-source.lua: set SCR_USER3 to ExtNav innovation threshold")
+    return update, 1000
+  end
+
+  -- check if GPS speed accuracy is over threshold
+  local gps_speed_accuracy = gps:speed_accuracy(0)
+  local gps_over_threshold = (gps_speed_accuracy == nil) or (gps:speed_accuracy(0) > gps_speedaccuracy_thresh)
+  local gps_usable = (gps_speed_accuracy ~= nil) and (gps_speed_accuracy <= gps_usable_accuracy)
+
+  -- get external nav innovations from ahrs
   local extnav_innov = Vector3f()
   local extnav_var = Vector3f()
   extnav_innov, extnav_var = ahrs:get_vel_innovations_and_variances_by_source(6)
+  local extnav_over_threshold = (extnav_innov == nil) or (extnav_innov:z() == 0.0) or (math.abs(extnav_innov:z()) > extnav_innov_thresh)
 
-  -- check GPS and ExternalNav status
-  local gps_speedaccuracy_thresh = param:get('SCR_USER2')  -- SCR_USER2 holds GPS speed accuracy threshold
-  local extnav_innov_thresh = param:get('SCR_USER3')  -- SCR_USER3 holds Non-GPS vertical velocity innovation
-  if gps_speedaccuracy_thresh and extnav_innov_thresh then
-    -- speed accuracy check vote (vote "-1" to move towards GPS, "+1" to move to Non-GPS)
-    local gps_speedaccuracy_vote = 0
-    if (gps_speedaccuracy_thresh > 0 and gps:speed_accuracy(0)) then
-      if (gps:speed_accuracy(0) > gps_speedaccuracy_thresh) then
-        gps_speedaccuracy_vote = 1
-        --gcs:send_text(0, "GPS SpdAcc high (" .. tostring(gps:speed_accuracy(0)) .. ">" .. tostring(gps_speedaccuracy_thresh) .. ")")
-      else
-        gps_speedaccuracy_vote = -1
-        --gcs:send_text(0, "GPS SpdAcc low (" .. tostring(gps:speed_accuracy(0)) .. "<" .. tostring(gps_speedaccuracy_thresh) .. ")")
-      end
-    end
-    -- Non-GPS innovation check vote (vote "-1" to move towards GPS, "+1" to move to Non-GPS)
-    local extnav_innov_vote = 0
-    if (extnav_innov and extnav_innov_thresh > 0) then
-      if (math.abs(extnav_innov:z()) > extnav_innov_thresh) then
-        extnav_innov_vote = -1
-        --gcs:send_text(0, "ExtNav Innov high (" .. tostring(math.abs(extnav_innov:z())) .. ">" .. tostring(extnav_innov_thresh) .. ")")
-      else
-        --gcs:send_text(0, "ExtNav Innov OK (" .. tostring(math.abs(extnav_innov:z())) .. "<=" .. tostring(extnav_innov_thresh) .. ")")
-      end
-    end
-    -- combine votes (a vote of "0" means no vote)
-    if gps_speedaccuracy_vote == 0 then
-      gps_speedaccuracy_vote = extnav_innov_vote
-    end
-    if extnav_innov_vote == 0 then
-      extnav_innov_vote = gps_speedaccuracy_vote
-    end
+  -- get rangefinder distance
+  local rngfnd_distance_m = 0
+  if rangefinder:has_data_orient(rangefinder_rotation) then
+    rngfnd_distance_m = rangefinder:distance_cm_orient(rangefinder_rotation) * 0.01
+  end
+  local rngfnd_over_threshold = (rngfnd_distance_m == 0) or (rngfnd_distance_m > rangefinder_thresh_dist)
 
-    if (gps_speedaccuracy_vote > 0 and extnav_innov_vote >= 0) then
-      -- gps speed accuracy is not good and external nav is OK so move towards Non-GPS
-      source_counter = math.max(source_counter, 0)
-      source_counter = source_counter + 1
-      source_counter = math.min(source_counter, source_counter_max)
-    elseif (gps_speedaccuracy_vote < 0 or extnav_innov_vote < 0) then
-      -- gps speed accuracy is good (or unchecked) or extnav innovations are bad so move towards GPS
-      source_counter = math.min(source_counter, 0)
-      source_counter = source_counter - 1
-      source_counter = math.max(source_counter, -source_counter_max)
+  -- NpnGPS is usable if extnav innovations are good or rangefinder distance is short (for optical flow)
+  local nongps_usable = (not extnav_over_threshold) or (not rngfnd_over_threshold)
+
+  -- debug.debug
+  debug_counter = debug_counter + 1
+  if (debug_counter > 30) then
+    debug_counter = 0
+    --gcs:send_text(0, string.format("gpsu:%s ot:%s extot:%s rngot:%s nongpsu:%s", tostring(gps_usable), tostring(gps_over_threshold), tostring(extnav_over_threshold), tostring(rngfnd_over_threshold), tostring(nongps_usable)))
+  end
+
+  -- automatic selection logic --
+
+  -- GPS vs NonGPS vote. "-1" to move towards GPS, "+1" to move to Non-GPS
+  if (not gps_over_threshold) or (gps_usable and not nongps_usable) then
+    -- vote for GPS if GPS accuracy good OR usable GPS and NonGPS unusable
+    gps_vs_nongps_vote = math.max(gps_vs_nongps_vote - 1, -vote_counter_max)
+  elseif nongps_usable then
+    -- vote for NonGPS if extnav or opticalflow is usable
+    gps_vs_nongps_vote = math.min(gps_vs_nongps_vote + 1, vote_counter_max)
+  end
+
+  -- extnav vs optical flow vote. "-1" to move towards extnav, "+1" to move to opticalflow
+  if (not extnav_over_threshold) then
+    -- vote for extnav is innovations under threshold
+    extnav_vs_opticalflow_vote = math.max(extnav_vs_opticalflow_vote - 1, -vote_counter_max)
+  elseif (not rngfnd_over_threshold) then
+    -- vote for optical flow if rangefinder is not over threshold
+    extnav_vs_opticalflow_vote = math.min(extnav_vs_opticalflow_vote + 1, vote_counter_max)
+  end
+
+  -- auto source vote collation
+  local auto_source = -1                         -- auto source undecided if -1
+  if gps_vs_nongps_vote <= -vote_counter_max then
+    auto_source = 0                              -- GPS
+  elseif gps_vs_nongps_vote >= vote_counter_max then
+    if extnav_vs_opticalflow_vote <= -vote_counter_max then
+      auto_source = 1                            -- extnav
+    elseif extnav_vs_opticalflow_vote >= vote_counter_max then
+      auto_source = 2                            -- opticalflow
     end
   end
 
-  -- read switch input from RCx_FUNCTION = 89 (EKF Source Select)
-  local rc_function_source = rc:find_channel_for_option(89)
-  if rc_function_source then
-    local sw_pos = rc_function_source:get_aux_switch_pos()
-    if (sw_pos == 0) then
-      -- pilot has manual selected primary source
-      if (source_prev ~= 0) then
-        source_prev = 0
-        gcs:send_text(0, "Pilot switched to Primary source")
-      elseif (sw_pos ~= sw_pos_prev) then
-        gcs:send_text(0, "Pilot switched but already Primary source")
-      end
-    elseif (sw_pos == 1) then
-      -- pilot has selected auto section of source
-      if (source_prev == 1) and (source_counter == -source_counter_max) then
-        -- switch to primary source
-        ahrs:set_position_source(0)
-        source_prev = 0
-        gcs:send_text(0, "AHRS switched to Primary source")
-      elseif (source_prev == 0) and (source_counter == source_counter_max) then
-        -- switch to secondary source
-        ahrs:set_position_source(1)
-        source_prev = 1
-        gcs:send_text(0, "AHRS switched to Secondary source")
-      elseif (sw_pos ~= sw_pos_prev) then
-        if (source_prev == 0) then
-          gcs:send_text(0, "Auto source but already Primary")
-        else
-          gcs:send_text(0, "Auto source but already Secondary")
-        end
-      end
-      --gcs:send_text(0, "Src:" .. tostring(source_prev) .. "Cnt:" .. tostring(source_counter))
+  -- read source switch position from RCx_FUNCTION = 89 (EKF Source Select)
+  local sw_source_pos = rc_function_source:get_aux_switch_pos()
+  if sw_source_pos ~= sw_source_pos_prev then    -- check for changes in source switch position
+    sw_source_pos_prev = sw_source_pos           -- record new switch position so we can detect changes
+    auto_switch = false                          -- disable auto switching of source
+    if source_prev ~= sw_source_pos then       -- check if switch position does not match source (there is a one-to-one mapping of switch to source)
+      source_prev = sw_source_pos                -- record what source should now be (changed by ArduPilot vehicle code)
+      gcs:send_text(0, "Pilot switched to Source " .. string.format("%d", source_prev+1))
     else
-      -- pilot has manual selected secondary source
-      if (source_prev ~= 1) then
-        source_prev = 1
-        gcs:send_text(0, "Pilot switched to Secondary source")
-      elseif (sw_pos ~= sw_pos_prev) then
-        gcs:send_text(0, "Pilot switched but already Secondary source")
+      gcs:send_text(0, "Pilot switched but already Source " .. string.format("%d", source_prev+1))
+    end
+  end
+
+  -- read auto source switch position from RCx_FUNCTION = 83 (ZigZag_Auto)
+  local sw_auto_pos = rc_function_auto:get_aux_switch_pos()
+  if sw_auto_pos ~= sw_auto_pos_prev  then       -- check for changes in source auto switch position
+    sw_auto_pos_prev = sw_auto_pos               -- record new switch position so we can detect changes
+    if sw_auto_pos == 0 then                     -- pilot has pulled switch low
+      auto_switch = false                        -- disable auto switching of source
+      if sw_source_pos ~= source_prev then       -- check if source will change
+        source_prev = sw_source_pos              -- record pilot's selected source
+        ahrs:set_position_source(source_prev)    -- switch to pilot's selected source
+        gcs:send_text(0, "Auto source disabled, switched to Source " .. string.format("%d", source_prev+1))
+      else
+        gcs:send_text(0, "Auto source disabled, already Source " .. string.format("%d", source_prev+1))
+      end
+    elseif sw_auto_pos == 2 then                 -- pilot has pulled switch high
+      auto_switch = true                         -- enable auto switching of source
+      if auto_source < 0 then
+        gcs:send_text(0, "Auto source enabled, undecided, Source " .. string.format("%d", source_prev+1))
+	  elseif auto_source ~= source_prev then     -- check if source will change
+        source_prev = auto_source                -- record pilot's selected source
+        ahrs:set_position_source(source_prev)    -- switch to pilot's selected source
+        gcs:send_text(0, "Auto source enabled, switched to Source " .. string.format("%d", source_prev+1))
+      else
+        gcs:send_text(0, "Auto source enabled, already Source " .. string.format("%d", source_prev+1))
       end
     end
-    sw_pos_prev = sw_pos
+  end
+
+  -- auto switching
+  if auto_switch and (auto_source >= 0) and (auto_source ~= source_prev) then
+    source_prev = auto_source                  -- record selected source
+    ahrs:set_position_source(source_prev)    -- switch to pilot's selected source
+    gcs:send_text(0, "Auto switched to Source " .. string.format("%d", source_prev+1))
   end
 
   return update, 100
