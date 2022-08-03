@@ -406,7 +406,14 @@ bool AP_Arming_Plane::mission_checks(bool report)
                 const float dist = cmd.content.location.get_distance(prev_cmd.content.location);
                 const float tecs_land_speed = plane.TECS_controller.get_land_airspeed();
                 const float landing_speed = is_positive(tecs_land_speed)?tecs_land_speed:plane.aparm.airspeed_cruise_cm*0.01;
-                const float min_dist = 0.75 * plane.quadplane.stopping_distance(sq(landing_speed));
+                float min_dist = 0.75 * plane.quadplane.stopping_distance(sq(landing_speed));
+                int32_t prev_wp_alt;
+                Location::AltFrame land_alt_frame = prev_cmd.content.location.get_alt_frame();
+                if (land_alt_frame != Location::AltFrame::ABSOLUTE) {
+                    if (prev_cmd.content.location.get_alt_cm(land_alt_frame, prev_wp_alt)) {
+                        min_dist = safe_sqrt(sq(min_dist) + sq(static_cast<float>(prev_wp_alt) / 100.0f));
+                    }
+                }
                 if (dist < min_dist) {
                     ret = false;
                     check_failed(ARMING_CHECK_MISSION, report, "VTOL land too short, min %.0fm", min_dist);
